@@ -44,3 +44,41 @@ body {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Themed slim scrollbar — matches sidebar */
+.themed-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(99, 102, 241, 0.25) transparent;
+}
+
+.themed-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.themed-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+  border-radius: 999px;
+}
+
+.themed-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.2);
+  border-radius: 999px;
+  transition: background 0.2s ease;
+}
+
+.themed-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(99, 102, 241, 0.5);
+}
+
+/* Dark theme override */
+.dark-theme .themed-scrollbar {
+  scrollbar-color: rgba(129, 140, 248, 0.2) transparent;
+}
+
+.dark-theme .themed-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(129, 140, 248, 0.2);
+}
+
+.dark-theme .themed-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(129, 140, 248, 0.45);
+}

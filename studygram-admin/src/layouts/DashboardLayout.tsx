@@ -146,9 +146,9 @@ export const DashboardLayout: React.FC = () => {
   };
 
   return (
-    <div className={`min-h-screen flex flex-col bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 smooth-transition ${themeMode === 'dark' ? 'dark-theme' : ''}`}>
+    <div className={`h-screen overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-800 dark:text-slate-100 smooth-transition ${themeMode === 'dark' ? 'dark-theme' : ''}`}>
       {/* Top Header */}
-      <header className="bg-[#0b1329] text-white border-b border-slate-800 py-3.5 px-6 flex justify-between items-center sticky top-0 z-40">
+      <header className="bg-[#0b1329] text-white border-b border-slate-800 py-3.5 px-6 flex justify-between items-center fixed top-0 left-0 right-0 z-50 h-[60px]">
         {/* Left: Logo */}
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 bg-indigo-600/25 text-indigo-400 rounded-xl flex items-center justify-center border border-indigo-500/30">
@@ -225,19 +225,13 @@ export const DashboardLayout: React.FC = () => {
       </header>
 
       {/* Main Container below Header */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* Sidebar */}
-        <aside className={`bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col h-full smooth-transition ${sidebarCollapsed ? 'w-20' : 'w-64'
+      <div className="flex pt-[60px] h-screen overflow-hidden">
+        {/* Sidebar — Fixed, full height below header */}
+        <aside className={`fixed top-[60px] left-0 bottom-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col smooth-transition z-40 ${sidebarCollapsed ? 'w-20' : 'w-64'
           }`}>
-          {/* Sidebar Header (collapse button only) */}
-          <div className="flex items-center justify-end p-3 border-b border-slate-200 dark:border-slate-800">
-            <IconButton size="small" onClick={() => dispatch(toggleSidebar())} className="mx-auto">
-              {sidebarCollapsed ? <ChevronRight className="w-5 h-5" /> : <ChevronLeft className="w-5 h-5" />}
-            </IconButton>
-          </div>
 
           {/* Navigation Items */}
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          <nav className="flex-1 p-4 space-y-2 overflow-y-auto themed-scrollbar">
             {menuItems.map(item => {
               const isActive = location.pathname === item.path;
               return (
@@ -262,10 +256,29 @@ export const DashboardLayout: React.FC = () => {
               );
             })}
           </nav>
+
+          {/* Sidebar Footer — Toggle Button at Bottom */}
+          <div className="p-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-center">
+            <IconButton
+              size="small"
+              onClick={() => dispatch(toggleSidebar())}
+              sx={{
+                bgcolor: 'rgba(79,70,229,0.08)',
+                '&:hover': { bgcolor: 'rgba(79,70,229,0.16)' },
+                borderRadius: '10px',
+                width: 36,
+                height: 36,
+              }}
+            >
+              {sidebarCollapsed
+                ? <ChevronRight className="w-5 h-5 text-indigo-500" />
+                : <ChevronLeft className="w-5 h-5 text-indigo-500" />}
+            </IconButton>
+          </div>
         </aside>
 
-        {/* Main Content Pane */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+        {/* Main Content Pane — scrollable, offset by sidebar width */}
+        <div className={`flex flex-col min-w-0 overflow-y-auto h-full smooth-transition ${sidebarCollapsed ? 'ml-20' : 'ml-64'} flex-1`}>
           {/* Content Subheader (shows page title) */}
           <div className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 py-3 px-6 flex justify-between items-center">
             <h2 className="text-base font-bold font-heading">
