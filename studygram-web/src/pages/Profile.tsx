@@ -4,7 +4,7 @@ import type { RootState } from '../features/store';
 import { updateProfile } from '../../src/features/authSlice';
 import { PostCard } from '../components/PostCard';
 import { Avatar } from '../components/Avatar';
-import { Edit2, Grid, Bookmark, BookOpen, Camera } from 'lucide-react';
+import { Edit2, Grid, Bookmark, BookOpen, Camera, MessageCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogTitle, TextField, Button } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { apiClient } from '../utils/apiClient';
@@ -70,7 +70,7 @@ export const Profile: React.FC = () => {
           createdAt: new Date(p.createdAt).toLocaleDateString()
         }));
 
-        setPosts(mapped.filter((p: any) => p.authorUsername === user?.username));
+        setPosts(mapped.filter((p: any) => p.authorUsername === (paramUsername || user?.username)));
       }
 
       // Get saved posts
@@ -185,6 +185,42 @@ export const Profile: React.FC = () => {
     }
   };
 
+  const handleStartChat = async () => {
+    if (!profileData?.id) return;
+    try {
+      const res = await apiClient.post('/chat/conversation', { otherUserId: profileData.id });
+      if (res && res.data) {
+        import('../features/chatSlice').then(({ setActiveConversation }) => {
+          dispatch(setActiveConversation(res.data.id));
+          navigate('/chat');
+        });
+      }
+    } catch (err) {
+      console.error('Error starting chat:', err);
+    }
+  };
+
+  const handleToggleFollow = async (userId: number, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+    try {
+      const res = await apiClient.post('/profile/toggle-follow', { followingId: userId });
+      if (res && res.data) {
+        const followed = res.data.followed;
+        setProfileData((prev: any) => ({
+          ...prev,
+          isFollowing: followed,
+          followersCount: followed ? (prev.followersCount || 0) + 1 : Math.max(0, (prev.followersCount || 0) - 1)
+        }));
+      }
+    } catch (err) {
+      console.error('Error toggling follow:', err);
+    }
+  };
+
   const handleListUserFollow = async (userId: number, e: React.MouseEvent) => {
     e.stopPropagation();
     if (!user) {
@@ -259,7 +295,7 @@ export const Profile: React.FC = () => {
               <p className="text-sm text-slate-500">@{profileData?.username}</p>
             </div>
             
-            {isCurrentUser && (
+            {isCurrentUser ? (
               <button
                 onClick={() => {
                   setFullName(profileData?.name || profileData?.fullName || '');
@@ -271,6 +307,26 @@ export const Profile: React.FC = () => {
                 <Edit2 className="w-4 h-4" />
                 Edit Profile
               </button>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handleToggleFollow(profileData?.id)}
+                  className={`inline-flex items-center justify-center gap-2 font-semibold py-2 px-6 rounded-xl text-sm transition cursor-pointer ${
+                    profileData?.isFollowing 
+                      ? 'border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}
+                >
+                  {profileData?.isFollowing ? 'Following' : 'Follow'}
+                </button>
+                <button
+                  onClick={handleStartChat}
+                  className="inline-flex items-center justify-center gap-2 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 font-semibold py-2 px-4 rounded-xl text-sm transition cursor-pointer"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  Message
+                </button>
+              </div>
             )}
           </div>
 

@@ -2,12 +2,14 @@ import { configureStore } from '@reduxjs/toolkit';
 import authReducer from './authSlice';
 import uiReducer from './uiSlice';
 import postsReducer from './postsSlice';
+import chatReducer from './chatSlice';
 
 export const store = configureStore({
   reducer: {
     auth: authReducer,
     ui: uiReducer,
     posts: postsReducer,
+    chat: chatReducer,
   },
 });
 

@@ -1,5 +1,7 @@
 import app from './app';
+import { createServer } from 'http';
 import { sequelize } from './config/db';
+import { SocketServer } from './socket/SocketServer';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -21,7 +23,13 @@ const startServer = async () => {
     const { seedDatabase } = require('./database/seeders/dbSeeder');
     await seedDatabase();
 
-    app.listen(PORT, () => {
+    // Create HTTP server from Express app
+    const server = createServer(app);
+    
+    // Initialize WebSockets
+    new SocketServer(server);
+
+    server.listen(PORT, () => {
       console.log(`StudyGram API Server running on port ${PORT}`);
       console.log(`Swagger documentation available at http://localhost:${PORT}/docs`);
     });

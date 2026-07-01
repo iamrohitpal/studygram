@@ -6,6 +6,9 @@ import { SavedPost } from './SavedPost';
 import { Notification } from './Notification';
 import { UploadReminder } from './UploadReminder';
 import { SocialAccount } from './SocialAccount';
+import { ConversationParticipant } from './ConversationParticipant';
+import { Message } from './Message';
+import { MessageStatus } from './MessageStatus';
 
 @Table({
   tableName: 'users',
@@ -137,6 +140,15 @@ export class User extends Model {
   @HasOne(() => UploadReminder)
   uploadReminder!: UploadReminder;
 
-  @HasOne(() => SocialAccount)
-  socialAccount!: SocialAccount;
+  @HasMany(() => SocialAccount)
+  socialAccounts!: SocialAccount[];
+
+  @HasMany(() => ConversationParticipant)
+  conversations!: ConversationParticipant[];
+
+  @HasMany(() => Message, 'senderId')
+  sentMessages!: Message[];
+
+  @HasMany(() => MessageStatus)
+  messageStatuses!: MessageStatus[];
 }

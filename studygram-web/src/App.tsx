@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { store } from './features/store';
 import type { RootState } from './features/store';
 import { getMuiTheme } from './theme/theme';
+import { SocketProvider } from './contexts/SocketContext';
 
 // Layouts
 import { AuthLayout } from './layouts/AuthLayout';
@@ -34,6 +35,7 @@ const Upload = lazy(() => import('./pages/Upload').then(module => ({ default: mo
 const Saved = lazy(() => import('./pages/Saved').then(module => ({ default: module.Saved })));
 const Profile = lazy(() => import('./pages/Profile').then(module => ({ default: module.Profile })));
 const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })));
+const Chat = lazy(() => import('./pages/Chat').then(module => ({ default: module.Chat })));
 
 // Auth Pages
 const Login = lazy(() => import('./pages/auth/Login').then(module => ({ default: module.Login })));
@@ -116,6 +118,8 @@ const AppContent: React.FC = () => {
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/profile/:username" element={<Profile />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/chat" element={<Chat />} />
+                <Route path="/chat/:conversationId" element={<Chat />} />
               </Route>
             </Route>
 
@@ -143,9 +147,11 @@ function App() {
   return (
     <Provider store={store}>
       <QueryClientProvider client={queryClient}>
-        <BrowserRouter>
-          <AppContent />
-        </BrowserRouter>
+        <SocketProvider>
+          <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
+        </SocketProvider>
       </QueryClientProvider>
     </Provider>
   );

@@ -7,6 +7,7 @@ import { categoryController } from '../controllers/CategoryController';
 import { searchController } from '../controllers/SearchController';
 import { notificationController } from '../controllers/NotificationController';
 import { reminderController } from '../controllers/ReminderController';
+import { chatController } from '../controllers/ChatController';
 import { authenticateJWT, authorizeRoles, optionalAuthenticateJWT } from '../middlewares/authMiddleware';
 import { apiRateLimiter } from '../middlewares/rateLimiter';
 import { upload } from '../middlewares/uploadMiddleware';
@@ -833,5 +834,72 @@ router.get('/admin/social', authenticateJWT, authorizeRoles('superadmin'), admin
  *         description: Settings saved
  */
 router.put('/admin/social', authenticateJWT, authorizeRoles('superadmin'), adminController.updateSocialSettings);
+
+// CHAT ROUTES
+/**
+ * @openapi
+ * /chat/conversations:
+ *   get:
+ *     summary: Get user conversations
+ *     tags: [Chat]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/chat/conversations', authenticateJWT, chatController.getConversations);
+
+/**
+ * @openapi
+ * /chat/conversation/{id}:
+ *   get:
+ *     summary: Get conversation details
+ *     tags: [Chat]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/chat/conversation/:id', authenticateJWT, chatController.getConversation);
+
+/**
+ * @openapi
+ * /chat/messages/{conversationId}:
+ *   get:
+ *     summary: Get conversation messages
+ *     tags: [Chat]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/chat/messages/:conversationId', authenticateJWT, chatController.getMessages);
+
+/**
+ * @openapi
+ * /chat/conversation:
+ *   post:
+ *     summary: Create new conversation
+ *     tags: [Chat]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/chat/conversation', authenticateJWT, chatController.createConversation);
+
+/**
+ * @openapi
+ * /chat/search-users:
+ *   get:
+ *     summary: Search users for chat
+ *     tags: [Chat]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.get('/chat/search-users', authenticateJWT, chatController.searchUsers);
+
+/**
+ * @openapi
+ * /chat/upload:
+ *   post:
+ *     summary: Upload chat attachment
+ *     tags: [Chat]
+ *     security:
+ *       - bearerAuth: []
+ */
+router.post('/chat/upload', authenticateJWT, upload.single('file'), chatController.uploadAttachment);
 
 export default router;

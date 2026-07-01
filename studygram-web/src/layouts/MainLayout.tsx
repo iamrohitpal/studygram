@@ -17,7 +17,8 @@ import {
   User,
   Sun,
   Moon,
-  Film
+  Film,
+  MessageCircle
 } from 'lucide-react';
 import {
   Badge,
@@ -103,6 +104,7 @@ export const MainLayout: React.FC = () => {
 
   if (user) {
     menuItems.push(
+      { name: 'Messages', icon: <MessageCircle className="w-5 h-5" />, path: '/chat' },
       { name: 'Upload Center', icon: <PlusSquare className="w-5 h-5" />, path: '/upload' },
       { name: 'Saved Content', icon: <Bookmark className="w-5 h-5" />, path: '/saved' },
       { name: 'Profile', icon: <User className="w-5 h-5" />, path: `/profile` },
@@ -228,15 +230,15 @@ export const MainLayout: React.FC = () => {
 
       {/* Main Content Area */}
       <main className="flex-1 min-w-0 flex flex-col md:h-screen md:overflow-y-auto overflow-x-hidden">
-        <div className="max-w-7xl mx-auto w-full p-4 md:p-8 flex-1 pb-20 md:pb-8">
+        <div className={location.pathname.startsWith('/chat') ? "w-full h-full flex-1" : "max-w-7xl mx-auto w-full p-4 md:p-8 flex-1 pb-20 md:pb-8"}>
           <Outlet />
         </div>
       </main>
 
       {/* Mobile Bottom Navigation Bar */}
       <nav className="md:hidden flex items-center justify-around bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 fixed bottom-0 left-0 right-0 py-2 z-[110]">
-        {menuItems.filter(item => item.path !== '/search').slice(0, 5).map((item) => {
-          const isActive = location.pathname === item.path;
+        {menuItems.filter(item => item.path !== '/search' && item.path !== '/saved').slice(0, 5).map((item) => {
+          const isActive = location.pathname.startsWith(item.path) && (item.path !== '/' || location.pathname === '/');
           return (
             <button
               key={item.name}
