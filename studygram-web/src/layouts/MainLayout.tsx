@@ -3,7 +3,7 @@ import { useNavigate, useLocation, Outlet } from 'react-router-dom';
 import { Avatar } from '../components/Avatar';
 import { useSelector, useDispatch } from 'react-redux';
 import type { RootState } from '../features/store';
-import { toggleTheme } from '../features/uiSlice';
+import { toggleTheme, setHasNewPosts, setHasNewReels } from '../features/uiSlice';
 import { logout } from '../features/authSlice';
 import { apiClient } from '../utils/apiClient';
 import {
@@ -40,7 +40,7 @@ export const MainLayout: React.FC = () => {
   const dispatch = useDispatch();
 
   const { user } = useSelector((state: RootState) => state.auth);
-  const { themeMode } = useSelector((state: RootState) => state.ui);
+  const { themeMode, hasNewPosts, hasNewReels } = useSelector((state: RootState) => state.ui);
   const { conversations } = useSelector((state: RootState) => state.chat);
   
   const totalUnreadChats = conversations.reduce((acc, curr) => acc + (curr.unreadCount || 0), 0);
@@ -48,6 +48,9 @@ export const MainLayout: React.FC = () => {
   const sidebarOpen = true;
   const [notifAnchorEl, setNotifAnchorEl] = useState<null | HTMLElement>(null);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [notifPage, setNotifPage] = useState(1);
+  const [notifHasMore, setNotifHasMore] = useState(true);
+  const [notifLoadingMore, setNotifLoadingMore] = useState(false);
 
   useEffect(() => {
     if (user) {
@@ -55,10 +58,22 @@ export const MainLayout: React.FC = () => {
     }
   }, [user]);
 
+  useEffect(() => {
+    if (location.pathname === '/') {
+      dispatch(setHasNewPosts(false));
+    }
+    if (location.pathname === '/reels') {
+      dispatch(setHasNewReels(false));
+    }
+  }, [location.pathname, dispatch]);
+
   const fetchNotifications = async () => {
     try {
-      const response = await apiClient.get('/notifications');
+      setNotifPage(1);
+      setNotifHasMore(true);
+      const response = await apiClient.get('/notifications?page=1&limit=10');
       if (response && response.data) {
+        if (response.data.length < 10) setNotifHasMore(false);
         setNotifications(response.data.map((n: any) => ({
           id: String(n.id),
           title: n.title,
@@ -69,6 +84,41 @@ export const MainLayout: React.FC = () => {
       }
     } catch (e) {
       console.error('Error fetching notifications:', e);
+    }
+  };
+
+  const loadMoreNotifications = async () => {
+    if (notifLoadingMore || !notifHasMore) return;
+    setNotifLoadingMore(true);
+    try {
+      const nextPage = notifPage + 1;
+      const response = await apiClient.get(`/notifications?page=${nextPage}&limit=10`);
+      if (response && response.data) {
+        if (response.data.length === 0) {
+          setNotifHasMore(false);
+        } else {
+          const newNotifs = response.data.map((n: any) => ({
+            id: String(n.id),
+            title: n.title,
+            message: n.message,
+            isRead: n.isRead,
+            createdAt: new Date(n.createdAt).toLocaleDateString()
+          }));
+          setNotifications(prev => [...prev, ...newNotifs]);
+          setNotifPage(nextPage);
+        }
+      }
+    } catch (e) {
+      console.error('Error loading more notifications:', e);
+    } finally {
+      setNotifLoadingMore(false);
+    }
+  };
+
+  const handleNotifScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop <= clientHeight + 50) {
+      loadMoreNotifications();
     }
   };
 
@@ -98,10 +148,38 @@ export const MainLayout: React.FC = () => {
     navigate('/login');
   };
 
+  const handleMenuClick = (path: string) => {
+    if (path === '/') {
+      if (location.pathname === '/') {
+        window.location.reload();
+      } else {
+        navigate('/');
+      }
+    } else {
+      navigate(path);
+    }
+  };
+
   const menuItems = [
-    { name: 'Home Feed', icon: <Home className="w-5 h-5" />, path: '/' },
+    { 
+      name: 'Home Feed', 
+      icon: (
+        <Badge color="error" variant="dot" invisible={!hasNewPosts}>
+          <Home className="w-5 h-5" />
+        </Badge>
+      ), 
+      path: '/' 
+    },
     { name: 'Search', icon: <Search className="w-5 h-5" />, path: '/search' },
-    { name: 'Study Reels', icon: <Film className="w-5 h-5" />, path: '/reels' }
+    { 
+      name: 'Study Reels', 
+      icon: (
+        <Badge color="error" variant="dot" invisible={!hasNewReels}>
+          <Film className="w-5 h-5" />
+        </Badge>
+      ), 
+      path: '/reels' 
+    }
   ];
 
   if (user) {
@@ -174,7 +252,7 @@ export const MainLayout: React.FC = () => {
             return (
               <button
                 key={item.name}
-                onClick={() => navigate(item.path)}
+                onClick={() => handleMenuClick(item.path)}
                 className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl text-sm font-medium transition-all ${isActive
                   ? 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400'
                   : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/60'
@@ -249,7 +327,7 @@ export const MainLayout: React.FC = () => {
           return (
             <button
               key={item.name}
-              onClick={() => navigate(item.path)}
+              onClick={() => handleMenuClick(item.path)}
               className={`flex flex-col items-center gap-0.5 p-2 transition-all ${isActive ? 'text-indigo-600 dark:text-indigo-400' : 'text-slate-500 dark:text-slate-400'
                 }`}
             >
@@ -290,19 +368,26 @@ export const MainLayout: React.FC = () => {
             No notifications yet
           </div>
         ) : (
-          notifications.map((notif) => (
-            <MenuItem key={notif.id} onClick={handleNotifClose} sx={{ borderBottom: '1px solid rgba(0,0,0,0.03)', py: 1.5 }}>
-              <div className="flex items-start gap-3 w-full">
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{notif.title}</p>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 whitespace-normal leading-relaxed mt-0.5">
-                    {notif.message}
-                  </p>
-                  <span className="text-[10px] text-slate-400 mt-1 block">{notif.createdAt}</span>
+          <div className="overflow-y-auto max-h-[300px]" onScroll={handleNotifScroll}>
+            {notifications.map((notif) => (
+              <MenuItem key={notif.id} onClick={handleNotifClose} sx={{ borderBottom: '1px solid rgba(0,0,0,0.03)', py: 1.5 }}>
+                <div className="flex items-start gap-3 w-full">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{notif.title}</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 whitespace-normal leading-relaxed mt-0.5">
+                      {notif.message}
+                    </p>
+                    <span className="text-[10px] text-slate-400 mt-1 block">{notif.createdAt}</span>
+                  </div>
                 </div>
+              </MenuItem>
+            ))}
+            {notifLoadingMore && (
+              <div className="p-3 text-center text-xs text-slate-500 animate-pulse">
+                Loading older notifications...
               </div>
-            </MenuItem>
-          ))
+            )}
+          </div>
         )}
       </MuiMenu>
     </div>

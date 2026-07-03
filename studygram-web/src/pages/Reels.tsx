@@ -164,6 +164,9 @@ export const Reels: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState<any | null>(null);
   const [reels, setReels] = useState<ReelItem[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(1);
   const [isMuted, setIsMuted] = useState(true);
   
   const [activeIndex, setActiveIndex] = useState(0);
@@ -174,6 +177,9 @@ export const Reels: React.FC = () => {
   const [activeReelId, setActiveReelId] = useState<string | null>(null);
   const [comments, setComments] = useState<CommentData[]>([]);
   const [commentText, setCommentText] = useState('');
+  const [commentsPage, setCommentsPage] = useState(1);
+  const [commentsHasMore, setCommentsHasMore] = useState(true);
+  const [commentsLoadingMore, setCommentsLoadingMore] = useState(false);
 
   useEffect(() => {
     fetchCategories();
@@ -193,25 +199,14 @@ export const Reels: React.FC = () => {
   const selectCategory = async (cat: any) => {
     setSelectedCategory(cat);
     setLoading(true);
+    setPage(1);
+    setHasMore(true);
     try {
-      const response = await apiClient.get('/posts/feed');
+      const catParam = cat.id === 'all' ? '' : `&categoryId=${cat.id}`;
+      const response = await apiClient.get(`/posts/feed?page=1&limit=10&contentType=video${catParam}`);
       if (response && response.data) {
-        let videoPosts = response.data.filter((p: any) => p.contentType === 'video');
-        if (cat.id !== 'all') {
-          videoPosts = videoPosts.filter((p: any) => p.categoryId === cat.id);
-        }
-        
-        const mapped = videoPosts.map((p: any) => ({
-          id: String(p.id),
-          title: p.title,
-          caption: p.description,
-          mediaUrl: p.mediaUrl,
-          authorName: p.user?.name || 'Anonymous Creator',
-          authorAvatar: p.user?.profileImage,
-          likesCount: p.likesCount || 0,
-          commentsCount: p.commentsCount || 0,
-          category: p.category?.name || 'General'
-        }));
+        if (response.data.length < 10) setHasMore(false);
+        const mapped = mapReels(response.data);
         setReels(mapped);
       }
     } catch (e) {
@@ -219,6 +214,43 @@ export const Reels: React.FC = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadMoreReels = async () => {
+    if (loadingMore || !hasMore || !selectedCategory) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const catParam = selectedCategory.id === 'all' ? '' : `&categoryId=${selectedCategory.id}`;
+      const response = await apiClient.get(`/posts/feed?page=${nextPage}&limit=10&contentType=video${catParam}`);
+      if (response && response.data) {
+        if (response.data.length === 0) {
+          setHasMore(false);
+        } else {
+          const mapped = mapReels(response.data);
+          setReels(prev => [...prev, ...mapped]);
+          setPage(nextPage);
+        }
+      }
+    } catch (e) {
+      console.error('Error loading more reels:', e);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const mapReels = (data: any[]) => {
+    return data.map((p: any) => ({
+      id: String(p.id),
+      title: p.title,
+      caption: p.description,
+      mediaUrl: p.mediaUrl,
+      authorName: p.user?.name || 'Anonymous Creator',
+      authorAvatar: p.user?.profileImage,
+      likesCount: p.likesCount || 0,
+      commentsCount: p.commentsCount || 0,
+      category: p.category?.name || 'General'
+    }));
   };
 
   const handleScroll = () => {
@@ -229,14 +261,22 @@ export const Reels: React.FC = () => {
     if (index !== activeIndex) {
       setActiveIndex(index);
     }
+    
+    // Check if we reached the last few reels to load more
+    if (index >= reels.length - 2 && !loadingMore && hasMore) {
+      loadMoreReels();
+    }
   };
 
   const openComments = async (reelId: string) => {
     setActiveReelId(reelId);
     setShowComments(true);
+    setCommentsPage(1);
+    setCommentsHasMore(true);
     try {
-      const response = await apiClient.get(`/posts/${reelId}/comments`);
+      const response = await apiClient.get(`/posts/${reelId}/comments?page=1&limit=10`);
       if (response.data) {
+        if (response.data.length < 10) setCommentsHasMore(false);
         const mapped = response.data.map((c: any) => ({
           id: String(c.id),
           authorName: c.user?.name || 'User',
@@ -248,6 +288,41 @@ export const Reels: React.FC = () => {
       }
     } catch (err) {
       console.error('Error fetching comments:', err);
+    }
+  };
+
+  const loadMoreComments = async () => {
+    if (commentsLoadingMore || !commentsHasMore || !activeReelId) return;
+    setCommentsLoadingMore(true);
+    try {
+      const nextPage = commentsPage + 1;
+      const response = await apiClient.get(`/posts/${activeReelId}/comments?page=${nextPage}&limit=10`);
+      if (response.data) {
+        if (response.data.length === 0) {
+          setCommentsHasMore(false);
+        } else {
+          const mapped = response.data.map((c: any) => ({
+            id: String(c.id),
+            authorName: c.user?.name || 'User',
+            authorAvatar: c.user?.profileImage,
+            content: c.comment,
+            timestamp: new Date(c.createdAt).toLocaleDateString()
+          }));
+          setComments(prev => [...prev, ...mapped]);
+          setCommentsPage(nextPage);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading more comments:', err);
+    } finally {
+      setCommentsLoadingMore(false);
+    }
+  };
+
+  const handleCommentsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop <= clientHeight + 50) {
+      loadMoreComments();
     }
   };
 
@@ -360,16 +435,31 @@ export const Reels: React.FC = () => {
             onScroll={handleScroll}
             className="w-full h-full overflow-y-scroll snap-y snap-mandatory no-scrollbar scroll-smooth"
           >
-            {reels.map((reel, idx) => (
-              <ReelCard 
-                key={reel.id} 
-                reel={reel} 
-                isMuted={isMuted} 
+            {reels.map((reel, index) => (
+              <ReelCard
+                key={reel.id}
+                reel={reel}
+                isMuted={isMuted}
                 onMuteToggle={() => setIsMuted(!isMuted)}
                 onCommentClick={() => openComments(reel.id)}
-                active={activeIndex === idx}
+                active={index === activeIndex}
               />
             ))}
+            {loadingMore && (
+              <div className="h-full flex items-center justify-center shrink-0 w-full snap-start relative bg-slate-900 rounded-3xl">
+                <div className="text-white font-medium animate-pulse">Loading more reels...</div>
+              </div>
+            )}
+            {!hasMore && reels.length > 0 && (
+              <div className="h-full flex flex-col items-center justify-center shrink-0 w-full snap-start relative bg-slate-900 rounded-3xl p-8 text-center space-y-4">
+                <Film className="w-12 h-12 text-slate-700" />
+                <h3 className="text-white font-bold text-xl font-heading">You're all caught up!</h3>
+                <p className="text-slate-400 text-sm max-w-[200px]">You've seen all the reels in this category.</p>
+                <button onClick={() => setSelectedCategory(null)} className="mt-4 bg-white text-slate-900 px-6 py-2 rounded-full font-bold text-sm">
+                  Explore More
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -389,29 +479,34 @@ export const Reels: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto themed-scrollbar p-4 space-y-3">
+            {/* Scrollable Comments List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4" onScroll={handleCommentsScroll}>
               {comments.length === 0 ? (
-                <div className="py-8 text-center flex flex-col items-center">
-                  <MessageCircle className="w-8 h-8 text-slate-300 mb-2" />
-                  <p className="text-sm text-slate-400 font-medium">No comments yet. Be the first!</p>
-                </div>
+                <p className="text-center text-sm text-slate-500 py-8">No comments yet. Be the first!</p>
               ) : (
-                comments.map((comment) => (
-                  <div key={comment.id} className="flex gap-3">
-                    <Avatar 
-                      src={comment.authorAvatar} 
-                      name={comment.authorName || 'User'} 
-                      className="w-8 h-8 flex-shrink-0" 
-                    />
-                    <div className="flex-1">
-                      <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-2xl rounded-tl-none">
-                        <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{comment.authorName}</p>
-                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-0.5 leading-relaxed">{comment.content}</p>
+                <>
+                  {comments.map((comment) => (
+                    <div key={comment.id} className="flex gap-3">
+                      <Avatar
+                        src={comment.authorAvatar}
+                        name={comment.authorName}
+                        className="w-8 h-8"
+                      />
+                      <div>
+                        <div className="bg-slate-50 dark:bg-slate-850/50 p-3 rounded-2xl rounded-tl-none">
+                          <p className="text-xs font-semibold">{comment.authorName}</p>
+                          <p className="text-xs text-slate-700 dark:text-slate-300 mt-0.5 leading-relaxed font-sans">
+                            {comment.content}
+                          </p>
+                        </div>
+                        <span className="text-[10px] text-slate-400 ml-2 mt-1 block">{comment.timestamp}</span>
                       </div>
-                      <span className="text-[10px] text-slate-400 ml-2 mt-0.5 block">{comment.timestamp}</span>
                     </div>
-                  </div>
-                ))
+                  ))}
+                  {commentsLoadingMore && (
+                    <p className="text-center text-xs text-slate-500 py-2 animate-pulse">Loading more comments...</p>
+                  )}
+                </>
               )}
             </div>
 

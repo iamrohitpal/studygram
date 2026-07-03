@@ -16,6 +16,8 @@ interface UiState {
   themeMode: 'light' | 'dark';
   sidebarOpen: boolean;
   notifications: NotificationItem[];
+  hasNewPosts: boolean;
+  hasNewReels: boolean;
 }
 
 const mockNotifications: NotificationItem[] = [
@@ -61,8 +63,10 @@ const mockNotifications: NotificationItem[] = [
 
 const initialState: UiState = {
   themeMode: 'light',
-  sidebarOpen: true,
+  sidebarOpen: false,
   notifications: mockNotifications,
+  hasNewPosts: false,
+  hasNewReels: false,
 };
 
 const uiSlice = createSlice({
@@ -91,9 +95,15 @@ const uiSlice = createSlice({
         isRead: false,
       });
     },
+    setHasNewPosts(state, action: PayloadAction<boolean>) {
+      state.hasNewPosts = action.payload;
+    },
+    setHasNewReels(state, action: PayloadAction<boolean>) {
+      state.hasNewReels = action.payload;
+    }
   },
 });
 
-export const { toggleTheme, setTheme, toggleSidebar, markAllAsRead, addNotification } = uiSlice.actions;
+export const { toggleTheme, setTheme, toggleSidebar, markAllAsRead, addNotification, setHasNewPosts, setHasNewReels } = uiSlice.actions;
 export default uiSlice.reducer;
 export type { NotificationItem };

@@ -59,7 +59,10 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   const [likesCount, setLikesCount] = useState(post.likesCount);
   const [hasLiked, setHasLiked] = useState(post.hasLiked || false);
   const [hasSaved, setHasSaved] = useState(post.hasSaved || false);
-  const [hasFollowed, setHasFollowed] = useState(false); // Can be enhanced later if API returns follow state per post author
+  const [hasFollowed, setHasFollowed] = useState(false);
+  const [commentsPage, setCommentsPage] = useState(1);
+  const [commentsHasMore, setCommentsHasMore] = useState(true);
+  const [commentsLoadingMore, setCommentsLoadingMore] = useState(false); // Can be enhanced later if API returns follow state per post author
   const [comments, setComments] = useState<CommentData[]>([]);
   const [commentsCount, setCommentsCount] = useState(post.commentsCount || 0);
 
@@ -85,8 +88,11 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
 
   const fetchComments = async () => {
     try {
-      const response = await apiClient.get(`/posts/${post.id}/comments`);
+      setCommentsPage(1);
+      setCommentsHasMore(true);
+      const response = await apiClient.get(`/posts/${post.id}/comments?page=1&limit=10`);
       if (response.data) {
+        if (response.data.length < 10) setCommentsHasMore(false);
         const mapped = response.data.map((c: any) => ({
           id: String(c.id),
           authorName: c.user?.name || 'User',
@@ -95,10 +101,44 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
           timestamp: new Date(c.createdAt).toLocaleDateString()
         }));
         setComments(mapped);
-        setCommentsCount(mapped.length);
       }
     } catch (err) {
       console.error('Error fetching comments:', err);
+    }
+  };
+
+  const loadMoreComments = async () => {
+    if (commentsLoadingMore || !commentsHasMore) return;
+    setCommentsLoadingMore(true);
+    try {
+      const nextPage = commentsPage + 1;
+      const response = await apiClient.get(`/posts/${post.id}/comments?page=${nextPage}&limit=10`);
+      if (response.data) {
+        if (response.data.length === 0) {
+          setCommentsHasMore(false);
+        } else {
+          const mapped = response.data.map((c: any) => ({
+            id: String(c.id),
+            authorName: c.user?.name || 'User',
+            authorAvatar: c.user?.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent('User')}&background=6366f1&color=fff`,
+            content: c.comment,
+            timestamp: new Date(c.createdAt).toLocaleDateString()
+          }));
+          setComments(prev => [...prev, ...mapped]);
+          setCommentsPage(nextPage);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading more comments:', err);
+    } finally {
+      setCommentsLoadingMore(false);
+    }
+  };
+
+  const handleCommentsScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop <= clientHeight + 50) {
+      loadMoreComments();
     }
   };
 
@@ -369,28 +409,33 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         <DialogContent sx={{ p: 0 }}>
           <div className="flex flex-col h-[400px]">
             {/* Scrollable Comments List */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4" onScroll={handleCommentsScroll}>
               {comments.length === 0 ? (
                 <p className="text-center text-sm text-slate-500 py-8">No comments yet. Be the first!</p>
               ) : (
-                comments.map((comment) => (
-                  <div key={comment.id} className="flex gap-3">
-                    <Avatar
-                      src={comment.authorAvatar}
-                      name={comment.authorName || 'User'}
-                      className="w-8 h-8"
-                    />
-                    <div>
-                      <div className="bg-slate-50 dark:bg-slate-850/50 p-3 rounded-2xl rounded-tl-none">
-                        <p className="text-xs font-semibold">{comment.authorName}</p>
-                        <p className="text-xs text-slate-700 dark:text-slate-300 mt-0.5 leading-relaxed font-sans">
-                          {comment.content}
-                        </p>
+                <>
+                  {comments.map((comment) => (
+                    <div key={comment.id} className="flex gap-3">
+                      <Avatar
+                        src={comment.authorAvatar}
+                        name={comment.authorName || 'User'}
+                        className="w-8 h-8"
+                      />
+                      <div>
+                        <div className="bg-slate-50 dark:bg-slate-850/50 p-3 rounded-2xl rounded-tl-none">
+                          <p className="text-xs font-semibold">{comment.authorName}</p>
+                          <p className="text-xs text-slate-700 dark:text-slate-300 mt-0.5 leading-relaxed font-sans">
+                            {comment.content}
+                          </p>
+                        </div>
+                        <span className="text-[10px] text-slate-400 ml-2 mt-1 block">{comment.timestamp}</span>
                       </div>
-                      <span className="text-[10px] text-slate-400 ml-2 mt-1 block">{comment.timestamp}</span>
                     </div>
-                  </div>
-                ))
+                  ))}
+                  {commentsLoadingMore && (
+                    <p className="text-center text-xs text-slate-500 py-2 animate-pulse">Loading more comments...</p>
+                  )}
+                </>
               )}
             </div>
 

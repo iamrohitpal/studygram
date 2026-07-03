@@ -2,8 +2,8 @@ import { notificationRepository } from '../repositories/NotificationRepository';
 import { Notification } from '../database/models/Notification';
 
 export class NotificationService {
-  async getUserNotifications(userId: number): Promise<Notification[]> {
-    return notificationRepository.findUserNotifications(userId);
+  async getUserNotifications(userId: number, page: number = 1, limit: number = 20): Promise<Notification[]> {
+    return notificationRepository.findUserNotifications(userId, page, limit);
   }
 
   async markAsRead(userId: number, notificationId: number): Promise<Notification> {

@@ -21,7 +21,11 @@ export const ChatWindow: React.FC<{ conversationId: number }> = ({ conversationI
   const typingUser = useSelector((state: RootState) => state.chat.typingStatus[conversationId]);
 
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   const { socket, isConnected } = useSocket();
 
@@ -32,9 +36,12 @@ export const ChatWindow: React.FC<{ conversationId: number }> = ({ conversationI
   useEffect(() => {
     const fetchMessages = async () => {
       setLoading(true);
+      setPage(1);
+      setHasMore(true);
       try {
-        const res = await apiClient.get(`/chat/messages/${conversationId}`);
+        const res = await apiClient.get(`/chat/messages/${conversationId}?page=1&limit=50`);
         if (res && res.data) {
+          if (res.data.rows.length < 50) setHasMore(false);
           // Messages come from backend DESC, we want them ASC for chat display
           const ascMessages = [...res.data.rows].reverse();
           dispatch(setMessages({ conversationId, messages: ascMessages }));
@@ -49,6 +56,48 @@ export const ChatWindow: React.FC<{ conversationId: number }> = ({ conversationI
       fetchMessages();
     }
   }, [conversationId, dispatch]);
+
+  const loadMoreMessages = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const res = await apiClient.get(`/chat/messages/${conversationId}?page=${nextPage}&limit=50`);
+      if (res && res.data) {
+        if (res.data.rows.length === 0) {
+          setHasMore(false);
+        } else {
+          // Remember current scroll height to adjust after prepending
+          const container = messagesContainerRef.current;
+          const previousScrollHeight = container ? container.scrollHeight : 0;
+
+          const ascMessages = [...res.data.rows].reverse();
+          // prepend to Redux store
+          dispatch(setMessages({ conversationId, messages: [...ascMessages, ...messages] }));
+          setPage(nextPage);
+
+          // Maintain scroll position after render
+          setTimeout(() => {
+            if (container) {
+              container.scrollTop = container.scrollHeight - previousScrollHeight;
+            }
+          }, 0);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load older messages:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const handleScroll = () => {
+    if (messagesContainerRef.current) {
+      if (messagesContainerRef.current.scrollTop === 0) {
+        loadMoreMessages();
+      }
+    }
+  };
 
   useEffect(() => {
     // Auto-scroll to bottom on new message
@@ -113,7 +162,11 @@ export const ChatWindow: React.FC<{ conversationId: number }> = ({ conversationI
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+      <div 
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar"
+        onScroll={handleScroll}
+      >
         {loading ? (
           <div className="flex justify-center p-4">
             <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
@@ -136,6 +189,12 @@ export const ChatWindow: React.FC<{ conversationId: number }> = ({ conversationI
                 View Profile
               </button>
             </div>
+
+            {loadingMore && (
+              <div className="flex justify-center p-2">
+                <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
+              </div>
+            )}
 
             {messages.map((msg, index) => {
               const showAvatar = index === 0 || messages[index - 1].senderId !== msg.senderId;

@@ -6,7 +6,10 @@ export class NotificationController {
   async getNotifications(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const userId = req.user!.id;
-      const notifications = await notificationService.getUserNotifications(userId);
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+
+      const notifications = await notificationService.getUserNotifications(userId, page, limit);
       res.status(200).json({
         status: 'success',
         data: notifications

@@ -90,8 +90,9 @@ export class ProfileService {
     }
   }
 
-  async getFollowers(userId: number, currentUserId?: number): Promise<any[]> {
-    const followers = await followerRepository.findFollowers(userId);
+  async getFollowers(userId: number, currentUserId?: number, page: number = 1, limit: number = 20): Promise<any[]> {
+    const offset = (page - 1) * limit;
+    const followers = await followerRepository.findFollowers(userId, { limit, offset });
     let followingIds = new Set<number>();
     if (currentUserId) {
       const currentUserFollowing = await Follower.findAll({ where: { followerId: currentUserId } });
@@ -100,13 +101,16 @@ export class ProfileService {
 
     return followers.map(f => {
       const data = f.toJSON();
+      data.follower = data.followerUser;
       data.follower.isFollowing = followingIds.has(data.follower.id);
+      delete data.followerUser;
       return data;
     });
   }
 
-  async getFollowing(userId: number, currentUserId?: number): Promise<any[]> {
-    const following = await followerRepository.findFollowing(userId);
+  async getFollowing(userId: number, currentUserId?: number, page: number = 1, limit: number = 20): Promise<any[]> {
+    const offset = (page - 1) * limit;
+    const following = await followerRepository.findFollowing(userId, { limit, offset });
     let followingIds = new Set<number>();
     if (currentUserId) {
       const currentUserFollowing = await Follower.findAll({ where: { followerId: currentUserId } });
@@ -115,16 +119,20 @@ export class ProfileService {
 
     return following.map(f => {
       const data = f.toJSON();
+      data.following = data.followingUser;
       data.following.isFollowing = followingIds.has(data.following.id);
+      delete data.followingUser;
       return data;
     });
   }
 
-  async getTopCreators(currentUserId?: number): Promise<any[]> {
+  async getTopCreators(currentUserId?: number, page: number = 1, limit: number = 10): Promise<any[]> {
+    const offset = (page - 1) * limit;
     const users = await User.findAll({
       where: { status: 'active', role: 'user' },
       attributes: ['id', 'name', 'username', 'profileImage'],
-      limit: 10
+      limit,
+      offset
     });
     
     // Fallback if no users

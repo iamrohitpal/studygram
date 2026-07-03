@@ -7,6 +7,7 @@ import { MessageStatus } from '../database/models/MessageStatus';
 import { ConversationParticipant } from '../database/models/ConversationParticipant';
 
 export class SocketServer {
+  private static instance: SocketIOServer;
   private io: SocketIOServer;
   
   constructor(server: HttpServer) {
@@ -16,9 +17,18 @@ export class SocketServer {
         methods: ['GET', 'POST']
       }
     });
+    
+    SocketServer.instance = this.io;
 
     this.setupMiddleware();
     this.setupEventHandlers();
+  }
+
+  public static getIO(): SocketIOServer {
+    if (!SocketServer.instance) {
+      throw new Error("Socket.io not initialized");
+    }
+    return SocketServer.instance;
   }
 
   private setupMiddleware() {

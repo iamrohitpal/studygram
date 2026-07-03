@@ -31,7 +31,15 @@ export class AdminController {
 
   async getUsers(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const users = await User.findAll({ attributes: { exclude: ['password'] } });
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const offset = (page - 1) * limit;
+
+      const users = await User.findAll({ 
+        attributes: { exclude: ['password'] },
+        limit,
+        offset
+      });
       res.status(200).json({
         status: 'success',
         data: users
@@ -150,8 +158,14 @@ export class AdminController {
 
   async getReports(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const offset = (page - 1) * limit;
+
       const reports = await ReportedItem.findAll({
-        order: [['created_at', 'DESC']]
+        order: [['created_at', 'DESC']],
+        limit,
+        offset
       });
       res.status(200).json({
         status: 'success',

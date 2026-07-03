@@ -6,10 +6,13 @@ export class NotificationRepository extends BaseRepository<Notification> {
     super(Notification);
   }
 
-  async findUserNotifications(userId: number): Promise<Notification[]> {
+  async findUserNotifications(userId: number, page: number = 1, limit: number = 20): Promise<Notification[]> {
+    const offset = (page - 1) * limit;
     return this.findAll({
       where: { userId },
-      order: [['created_at', 'DESC']]
+      order: [['created_at', 'DESC']],
+      limit,
+      offset
     });
   }
 }

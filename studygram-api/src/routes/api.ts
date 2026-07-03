@@ -458,6 +458,23 @@ router.post('/posts/save', authenticateJWT, postController.save);
 router.get('/posts/saved', authenticateJWT, postController.getSaved);
 
 /**
+ * @openapi
+ * /posts/user/{username}:
+ *   get:
+ *     summary: Retrieve posts uploaded by a specific user
+ *     tags: [Posts]
+ *     parameters:
+ *       - name: username
+ *         in: path
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: User posts list
+ */
+router.get('/posts/user/:username', optionalAuthenticateJWT, postController.getUserPosts);
+
+/**
  * @swagger
  * /posts/trending-tags:
  *   get:

@@ -6,6 +6,7 @@ import { Comment } from '../database/models/Comment';
 import { SavedPost } from '../database/models/SavedPost';
 import { User } from '../database/models/User';
 import { Follower } from '../database/models/Follower';
+import { Category } from '../database/models/Category';
 import { CloudinaryUploader } from '../utils/cloudinaryUploader';
 
 export class PostService {
@@ -47,9 +48,28 @@ export class PostService {
       // Fetch followed users
       const follows = await Follower.findAll({ where: { followerId: currentUserId } });
       const followedUserIds = follows.map(f => f.followingId);
-      
-      // Bypass cache for personalized feed
-      const posts = await postRepository.findFeedPosts(options, visibilities, currentUserId, followedUserIds);
+      // Fetch preferred categories (interests)
+      let preferredCategoryIds: number[] = [];
+      try {
+        const { sequelize } = require('../config/db');
+        const [results] = await sequelize.query(`
+          SELECT category_id FROM (
+            SELECT p.category_id FROM likes l JOIN posts p ON l.post_id = p.id WHERE l.user_id = ${currentUserId}
+            UNION ALL
+            SELECT p.category_id FROM saved_posts s JOIN posts p ON s.post_id = p.id WHERE s.user_id = ${currentUserId}
+          ) as t 
+          WHERE category_id IS NOT NULL
+          GROUP BY category_id 
+          ORDER BY COUNT(*) DESC 
+          LIMIT 3
+        `);
+        preferredCategoryIds = (results as any[]).map(r => r.category_id);
+      } catch (err) {
+        console.error('Error fetching preferred categories:', err);
+      }
+
+      // Bypass cache for personalized algorithmic feed
+      const posts = await postRepository.findFeedPosts(options, visibilities, currentUserId, followedUserIds, preferredCategoryIds);
       
       const postIds = posts.map(p => p.id);
       if (postIds.length === 0) return [];
@@ -68,15 +88,16 @@ export class PostService {
       });
     }
 
-    const cacheKey = `feed_posts_public`;
+    const optionsHash = Buffer.from(JSON.stringify(options || {})).toString('base64');
+    const cacheKey = `feed_posts_public_${optionsHash}`;
     const cachedData = await redisClient.get(cacheKey);
 
     if (cachedData) {
       return JSON.parse(cachedData);
     }
 
-    const posts = await postRepository.findFeedPosts(options, visibilities);
-    await redisClient.set(cacheKey, JSON.stringify(posts), { EX: 300 });
+    const posts = await postRepository.findFeedPosts(options, visibilities, undefined, [], []);
+    await redisClient.set(cacheKey, JSON.stringify(posts), { EX: 60 });
     return posts;
   }
 
@@ -143,13 +164,16 @@ export class PostService {
     return comment;
   }
 
-  async getComments(postId: number): Promise<Comment[]> {
+  async getComments(postId: number, page: number = 1, limit: number = 20): Promise<Comment[]> {
+    const offset = (page - 1) * limit;
     return Comment.findAll({
       where: { postId },
       include: [
         { model: User, attributes: ['id', 'name', 'username', 'profileImage'] }
       ],
-      order: [['created_at', 'ASC']]
+      order: [['created_at', 'ASC']],
+      limit,
+      offset
     });
   }
 
@@ -164,20 +188,77 @@ export class PostService {
     }
   }
 
-  async getSavedPosts(userId: number): Promise<Post[]> {
+  async getSavedPosts(userId: number, page: number = 1, limit: number = 10): Promise<any[]> {
+    const offset = (page - 1) * limit;
     const savedList = await SavedPost.findAll({
       where: { userId },
-      attributes: ['postId']
+      attributes: ['postId'],
+      limit,
+      offset,
+      order: [['created_at', 'DESC']]
     });
 
     const postIds = savedList.map(s => s.postId);
     if (postIds.length === 0) return [];
 
-    return Post.findAll({
+    const posts = await Post.findAll({
       where: { id: postIds, status: 'active' },
       include: [
-        { model: User, attributes: ['id', 'name', 'username', 'profileImage'] }
+        { model: User, attributes: ['id', 'name', 'username', 'profileImage'] },
+        { model: Category, attributes: ['id', 'name'] }
       ]
+    });
+
+    return posts.map(p => {
+      const data = p.toJSON();
+      data.hasSaved = true; // since it's from saved posts
+      return data;
+    });
+  }
+
+  async getUserPosts(username: string, page: number = 1, limit: number = 10, currentUserId?: number): Promise<any[]> {
+    const targetUser = await User.findOne({ where: { username } });
+    if (!targetUser) throw new Error('User not found');
+
+    const offset = (page - 1) * limit;
+    
+    // Fetch posts created by target user
+    const posts = await postRepository.findAll({
+      where: { userId: targetUser.id, status: 'active' },
+      include: [
+        { model: User, attributes: ['id', 'name', 'username', 'profileImage'] },
+        { model: Category, attributes: ['id', 'name'] }
+      ],
+      order: [['created_at', 'DESC']],
+      limit,
+      offset
+    });
+
+    if (posts.length === 0) return [];
+
+    // Optional: decorate with hasLiked / hasSaved if current user
+    let likedPostIds = new Set<number>();
+    let savedPostIds = new Set<number>();
+
+    if (currentUserId) {
+      const userLikes = await Like.findAll({
+        where: { userId: currentUserId, postId: posts.map(p => p.id) },
+        attributes: ['postId']
+      });
+      userLikes.forEach(l => likedPostIds.add(l.postId));
+
+      const userSaves = await SavedPost.findAll({
+        where: { userId: currentUserId, postId: posts.map(p => p.id) },
+        attributes: ['postId']
+      });
+      userSaves.forEach(s => savedPostIds.add(s.postId));
+    }
+
+    return posts.map(p => {
+      const data = p.toJSON();
+      data.hasLiked = likedPostIds.has(data.id);
+      data.hasSaved = savedPostIds.has(data.id);
+      return data;
     });
   }
 
@@ -193,7 +274,7 @@ export class PostService {
     await post.destroy();
   }
 
-  async getTrendingTags(): Promise<{ tag: string, count: number }[]> {
+  async getTrendingTags(page: number = 1, limit: number = 10): Promise<{ tag: string, count: number }[]> {
     const posts = await Post.findAll({ attributes: ['description'] });
     const tagCounts: { [tag: string]: number } = {};
     posts.forEach(p => {
@@ -210,10 +291,10 @@ export class PostService {
     
     let sorted = Object.entries(tagCounts)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
       .map(([tag, count]) => ({ tag, count }));
-      
-    return sorted;
+
+    const offset = (page - 1) * limit;
+    return sorted.slice(offset, offset + limit);
   }
 }
 export const postService = new PostService();

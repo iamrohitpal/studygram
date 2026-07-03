@@ -13,6 +13,9 @@ export class SearchController {
       if (!q) throw new Error('Search query parameter "q" is required.');
 
       const term = String(q);
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const offset = (page - 1) * limit;
 
       // Search users
       const users = await User.findAll({
@@ -24,7 +27,8 @@ export class SearchController {
           status: 'active'
         },
         attributes: ['id', 'uuid', 'name', 'username', 'profileImage', 'bio'],
-        limit: 10
+        limit,
+        offset
       });
 
       const visibilities = ['public'];
@@ -58,7 +62,8 @@ export class SearchController {
         include: [
           { model: User, attributes: ['id', 'name', 'username', 'profileImage'] }
         ],
-        limit: 10
+        limit,
+        offset
       });
 
       // Search categories
@@ -67,7 +72,8 @@ export class SearchController {
           name: { [Op.like]: `%${term}%` },
           status: 'active'
         },
-        limit: 10
+        limit,
+        offset
       });
 
       let mappedPosts = posts;

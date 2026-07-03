@@ -12,52 +12,100 @@ export const Home: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useSelector((state: RootState) => state.auth);
   const [posts, setPosts] = useState<any[]>([]);
-  const [categories, setCategories] = useState<string[]>(['All']);
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [categories, setCategories] = useState<any[]>([{ id: 'all', name: 'All' }]);
+  const [selectedCategory, setSelectedCategory] = useState<any>({ id: 'all', name: 'All' });
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [page, setPage] = useState(1);
   const [trendingTags, setTrendingTags] = useState<{tag: string, count: number}[]>([]);
   const [topCreators, setTopCreators] = useState<any[]>([]);
-  const loadingMore = false;
-  const isDone = true;
   const loaderRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchInitialData();
   }, []);
 
-  const fetchInitialData = async () => {
-    setLoading(true);
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loading && !loadingMore && hasMore) {
+          loadMorePosts();
+        }
+      },
+      { threshold: 1.0 }
+    );
+
+    if (loaderRef.current) {
+      observer.observe(loaderRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [loading, loadingMore, hasMore, page, selectedCategory]);
+
+  const loadMorePosts = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
     try {
-      // Fetch posts
-      const postsRes = await apiClient.get('/posts/feed');
+      const nextPage = page + 1;
+      const catParam = selectedCategory.id === 'all' ? '' : `&categoryId=${selectedCategory.id}`;
+      const res = await apiClient.get(`/posts/feed?page=${nextPage}&limit=10${catParam}`);
+      if (res && res.data) {
+        if (res.data.length === 0) {
+          setHasMore(false);
+        } else {
+          const mapped = mapPosts(res.data);
+          setPosts(prev => [...prev, ...mapped]);
+          setPage(nextPage);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading more posts:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  const mapPosts = (data: any[]) => {
+    return data.map((p: any) => ({
+      id: String(p.id),
+      authorName: p.user?.name || 'Anonymous User',
+      authorUsername: p.user?.username || 'anonymous',
+      authorId: p.user?.id,
+      authorAvatar: p.user?.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent('User')}&background=6366f1&color=fff`,
+      type: p.contentType === 'note' ? 'notes' : p.contentType,
+      mediaUrl: p.mediaUrl,
+      notesTitle: p.title,
+      notesPages: 4,
+      caption: p.description,
+      category: p.category?.name || 'General',
+      tags: [],
+      likesCount: p.likesCount || 0,
+      commentsCount: p.commentsCount || 0,
+      hasLiked: p.hasLiked || false,
+      hasSaved: p.hasSaved || false,
+      createdAt: new Date(p.createdAt).toLocaleDateString()
+    }));
+  };
+
+  const fetchInitialData = async (catId: string = 'all') => {
+    setLoading(true);
+    setPage(1);
+    setHasMore(true);
+    try {
+      const catParam = catId === 'all' ? '' : `&categoryId=${catId}`;
+      const postsRes = await apiClient.get(`/posts/feed?page=1&limit=10${catParam}`);
       if (postsRes && postsRes.data) {
-        const mapped = postsRes.data.map((p: any) => ({
-          id: String(p.id),
-          authorName: p.user?.name || 'Anonymous User',
-          authorUsername: p.user?.username || 'anonymous',
-          authorId: p.user?.id,
-          authorAvatar: p.user?.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent('User')}&background=6366f1&color=fff`,
-          type: p.contentType === 'note' ? 'notes' : p.contentType,
-          mediaUrl: p.mediaUrl,
-          notesTitle: p.title,
-          notesPages: 4,
-          caption: p.description,
-          category: p.category?.name || 'General',
-          tags: [],
-          likesCount: p.likesCount || 0,
-          commentsCount: p.commentsCount || 0,
-          hasLiked: p.hasLiked || false,
-          hasSaved: p.hasSaved || false,
-          createdAt: new Date(p.createdAt).toLocaleDateString()
-        }));
-        setPosts(mapped);
+        if (postsRes.data.length < 10) setHasMore(false);
+        setPosts(mapPosts(postsRes.data));
       }
 
       // Fetch categories
-      const catRes = await apiClient.get('/categories');
-      if (catRes && catRes.data) {
-        const list = ['All', ...catRes.data.map((c: any) => c.name)];
-        setCategories(list);
+      if (categories.length <= 1) {
+        const catRes = await apiClient.get('/categories');
+        if (catRes && catRes.data) {
+          setCategories([{ id: 'all', name: 'All' }, ...catRes.data]);
+        }
       }
       // Fetch tags and creators
       try {
@@ -78,9 +126,12 @@ export const Home: React.FC = () => {
     }
   };
 
-  const filteredPosts = selectedCategory === 'All' 
-    ? posts 
-    : posts.filter(p => p.category === selectedCategory);
+  const handleCategorySelect = (cat: any) => {
+    setSelectedCategory(cat);
+    fetchInitialData(cat.id);
+  };
+
+  const filteredPosts = posts;
 
   const handleToggleFollow = async (creatorId: number, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -162,24 +213,21 @@ export const Home: React.FC = () => {
       {/* Categories Filter Carousel */}
       <div className="sticky top-0 z-20 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-xl border-y border-slate-200/50 dark:border-slate-800/50 -mx-4 px-4 py-3 mb-6 shadow-sm">
         <div className="overflow-x-auto custom-scrollbar pb-1">
-          <div className="flex gap-3">
-            {categories.map(category => {
-            const isSelected = selectedCategory === category;
-            return (
-              <button
-                key={category}
-                onClick={() => setSelectedCategory(category)}
-                className={`px-4 py-2 rounded-2xl text-xs font-bold whitespace-nowrap transition-all border cursor-pointer ${
-                  isSelected
-                    ? 'bg-indigo-600 border-indigo-600 text-white shadow-md shadow-indigo-500/10'
-                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700'
-                }`}
+           <div className="flex gap-3 overflow-x-auto custom-scrollbar pb-2 snap-x">
+            {categories.map((cat, i) => (
+              <button 
+                key={i}
+                onClick={() => handleCategorySelect(cat)}
+                className={`snap-start whitespace-nowrap px-6 py-2.5 rounded-full font-bold text-sm transition-all shadow-sm
+                  ${selectedCategory.id === cat.id 
+                    ? 'bg-indigo-600 text-white shadow-indigo-200 dark:shadow-none' 
+                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
               >
-                {category}
+                {cat.name}
               </button>
-            );
-          })}
-        </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -205,20 +253,10 @@ export const Home: React.FC = () => {
         )}
 
         {/* Loading Skeletons for older pages */}
-        {loadingMore && (
-          <div className="space-y-6">
-            <PostSkeleton />
+        <div ref={loaderRef} className="py-4 text-center">
+            {loadingMore && <div className="text-slate-500 font-medium">Loading more posts...</div>}
+            {!hasMore && posts.length > 0 && <div className="text-slate-400 font-medium">You've reached the end!</div>}
           </div>
-        )}
-
-        <div ref={loaderRef} className="h-1" />
-
-          {isDone && !loading && (
-            <div className="text-center py-6 text-xs text-slate-400 font-bold uppercase tracking-widest flex items-center justify-center gap-2">
-              <Award className="w-4 h-4 text-amber-500" />
-              You've caught up with all posts!
-            </div>
-          )}
         </div>
       </div>
 

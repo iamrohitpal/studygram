@@ -7,21 +7,23 @@ export class FollowerRepository extends BaseRepository<Follower> {
     super(Follower);
   }
 
-  async findFollowers(userId: number): Promise<Follower[]> {
+  async findFollowers(userId: number, options: any = {}): Promise<Follower[]> {
     return this.findAll({
       where: { followingId: userId },
       include: [
-        { model: User, as: 'follower', attributes: ['id', 'name', 'username', 'profileImage', 'bio'] }
-      ]
+        { model: User, as: 'followerUser', attributes: ['id', 'name', 'username', 'profileImage', 'bio'] }
+      ],
+      ...options
     });
   }
 
-  async findFollowing(userId: number): Promise<Follower[]> {
+  async findFollowing(userId: number, options: any = {}): Promise<Follower[]> {
     return this.findAll({
       where: { followerId: userId },
       include: [
-        { model: User, as: 'following', attributes: ['id', 'name', 'username', 'profileImage', 'bio'] }
-      ]
+        { model: User, as: 'followingUser', attributes: ['id', 'name', 'username', 'profileImage', 'bio'] }
+      ],
+      ...options
     });
   }
 

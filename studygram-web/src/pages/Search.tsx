@@ -11,6 +11,9 @@ export const Search: React.FC = () => {
   const [users, setUsers] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
@@ -24,9 +27,14 @@ export const Search: React.FC = () => {
 
   const executeSearch = async () => {
     setLoading(true);
+    setPage(1);
+    setHasMore(true);
     try {
-      const response = await apiClient.get(`/search?q=${encodeURIComponent(query)}`);
+      const response = await apiClient.get(`/search?q=${encodeURIComponent(query)}&page=1&limit=10`);
       if (response && response.data) {
+        if (response.data.posts.length < 10 && response.data.users.length < 10 && response.data.categories.length < 10) {
+          setHasMore(false);
+        }
         // Map posts
         const mappedPosts = response.data.posts.map((p: any) => ({
           id: String(p.id),
@@ -54,7 +62,8 @@ export const Search: React.FC = () => {
           name: u.name,
           username: u.username,
           avatar: u.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent('User')}&background=6366f1&color=fff`,
-          bio: u.bio || ''
+          bio: u.bio || '',
+          isFollowing: u.isFollowing || false
         }));
         setUsers(mappedUsers);
 
@@ -67,6 +76,68 @@ export const Search: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore || !query.trim()) return;
+    setLoadingMore(true);
+    try {
+      const nextPage = page + 1;
+      const response = await apiClient.get(`/search?q=${encodeURIComponent(query)}&page=${nextPage}&limit=10`);
+      if (response && response.data) {
+        if (response.data.posts.length === 0 && response.data.users.length === 0 && response.data.categories.length === 0) {
+          setHasMore(false);
+        } else {
+          // Map posts
+          const mappedPosts = response.data.posts.map((p: any) => ({
+            id: String(p.id),
+            authorName: p.user?.name || 'Anonymous User',
+            authorUsername: p.user?.username || 'anonymous',
+            authorAvatar: p.user?.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent('User')}&background=6366f1&color=fff`,
+            type: p.contentType === 'note' ? 'notes' : p.contentType,
+            mediaUrl: p.mediaUrl,
+            notesTitle: p.title,
+            notesPages: 4,
+            caption: p.description,
+            category: p.category?.name || 'General',
+            tags: [],
+            likesCount: p.likesCount || 0,
+            hasLiked: p.hasLiked || false,
+            hasSaved: p.hasSaved || false,
+            createdAt: new Date(p.createdAt).toLocaleDateString()
+          }));
+
+          setPosts(prev => [...prev, ...mappedPosts]);
+
+          // Map users
+          const mappedUsers = response.data.users.map((u: any) => ({
+            id: u.id,
+            name: u.name,
+            username: u.username,
+            avatar: u.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent('User')}&background=6366f1&color=fff`,
+            bio: u.bio || '',
+            isFollowing: u.isFollowing || false
+          }));
+          setUsers(prev => [...prev, ...mappedUsers]);
+          setCategories(prev => [...prev, ...(response.data.categories || [])]);
+          setPage(nextPage);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading more search results:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 500) {
+        loadMore();
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [page, hasMore, loadingMore, query]);
 
   return (
     <div className="space-y-6">
@@ -184,6 +255,12 @@ export const Search: React.FC = () => {
                   ))}
                 </div>
               )
+            )}
+            
+            {loadingMore && (
+              <div className="py-6 text-center text-sm font-semibold text-slate-500 animate-pulse">
+                Loading more results...
+              </div>
             )}
           </>
         )}

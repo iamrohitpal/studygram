@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { useSelector, useDispatch } from 'react-redux';
 import type { RootState } from '../features/store';
 import { addMessage, updateConversationList, setTyping, setOnlineStatus, setMessageSeen } from '../features/chatSlice';
+import { setHasNewPosts, setHasNewReels } from '../features/uiSlice';
 import type { ChatMessage } from '../features/chatSlice';
 
 interface SocketContextType {
@@ -55,6 +56,14 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     newSocket.on('stop_typing', (data: { conversationId: number }) => {
       dispatch(setTyping({ conversationId: data.conversationId, username: null }));
+    });
+
+    newSocket.on('new_post_from_following', () => {
+      dispatch(setHasNewPosts(true));
+    });
+
+    newSocket.on('new_reel_from_following', () => {
+      dispatch(setHasNewReels(true));
     });
 
     newSocket.on('user_online', (data: { userId: number }) => {

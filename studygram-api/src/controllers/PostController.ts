@@ -2,6 +2,11 @@ import { Response, NextFunction } from 'express';
 import { postService } from '../services/PostService';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { SocialMediaService } from '../services/SocialMediaService';
+import { followerRepository } from '../repositories/FollowerRepository';
+import { notificationService } from '../services/NotificationService';
+import { firebaseService } from '../services/FirebaseService';
+import { SocketServer } from '../socket/SocketServer';
+import { User } from '../database/models/User';
 
 export class PostController {
   async create(req: AuthRequest, res: Response, next: NextFunction) {
@@ -28,6 +33,37 @@ export class PostController {
         }
       }
 
+      // Notify followers
+      try {
+        const currentUser = await User.findByPk(req.user!.id);
+        const username = currentUser ? currentUser.username : 'Someone';
+
+        const followers = await followerRepository.findFollowers(req.user!.id);
+        const followerIds = followers.map(f => f.followerId);
+        
+        const title = 'New Post';
+        const body = `${username} uploaded a new post.`;
+        
+        // Use Socket IO to emit live event
+        const io = SocketServer.getIO();
+
+        for (const followerId of followerIds) {
+          await notificationService.createNotification(followerId, title, body);
+          
+          if (post.contentType === 'video') {
+            io.to(`user_${followerId}`).emit('new_reel_from_following', { userId: req.user!.id, postId: post.id });
+          } else {
+            io.to(`user_${followerId}`).emit('new_post_from_following', { userId: req.user!.id, postId: post.id });
+          }
+        }
+
+        // We can send push notifications (without FCM tokens, it skips silently)
+        // Ideally we fetch FCM tokens for followers here
+        // firebaseService.sendPushNotification(tokens, title, body);
+      } catch (err) {
+        console.error('Failed to notify followers for post:', err);
+      }
+
       res.status(211).json({
         status: 'success',
         message: 'Post published successfully.',
@@ -40,8 +76,22 @@ export class PostController {
 
   async getFeed(req: AuthRequest, res: Response, next: NextFunction) {
     try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const offset = (page - 1) * limit;
+      
+      const where: any = {};
+      if (req.query.categoryId && req.query.categoryId !== 'all' && req.query.categoryId !== 'All') {
+        where.categoryId = req.query.categoryId;
+      }
+      if (req.query.contentType) {
+        where.contentType = req.query.contentType;
+      }
+
+      const options = { limit, offset, where };
+
       const visibilities = ['public']; // The 'followers' visibility logic is now handled based on currentUserId
-      const feed = await postService.getFeed({}, visibilities, req.user?.id);
+      const feed = await postService.getFeed(options, visibilities, req.user?.id);
       res.status(200).json({
         status: 'success',
         data: feed
@@ -102,7 +152,10 @@ export class PostController {
   async getComments(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { postId } = req.params;
-      const comments = await postService.getComments(Number(postId));
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+
+      const comments = await postService.getComments(Number(postId), page, limit);
       res.status(200).json({
         status: 'success',
         data: comments
@@ -130,10 +183,30 @@ export class PostController {
     }
   }
 
+  async getUserPosts(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { username } = req.params;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      
+      const userPosts = await postService.getUserPosts(username, page, limit, req.user?.id);
+
+      res.status(200).json({
+        status: 'success',
+        data: userPosts
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async getSaved(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const userId = req.user!.id;
-      const savedPosts = await postService.getSavedPosts(userId);
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      
+      const savedPosts = await postService.getSavedPosts(userId, page, limit);
 
       res.status(200).json({
         status: 'success',
@@ -162,7 +235,9 @@ export class PostController {
 
   async getTrendingTags(req: AuthRequest, res: Response, next: NextFunction) {
     try {
-      const tags = await postService.getTrendingTags();
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 10;
+      const tags = await postService.getTrendingTags(page, limit);
       res.status(200).json({
         status: 'success',
         data: tags

@@ -14,10 +14,20 @@ export const Profile: React.FC = () => {
   const navigate = useNavigate();
   const { username: paramUsername } = useParams<{ username?: string }>();
   const { user } = useSelector((state: RootState) => state.auth);
-  
+
   const targetUsername = paramUsername || user?.username;
   const isCurrentUser = !paramUsername || paramUsername === user?.username;
-  
+
+  // Uploads Pagination
+  const [postsPage, setPostsPage] = useState(1);
+  const [postsHasMore, setPostsHasMore] = useState(true);
+  const [postsLoadingMore, setPostsLoadingMore] = useState(false);
+
+  // Saved Pagination
+  const [savedPage, setSavedPage] = useState(1);
+  const [savedHasMore, setSavedHasMore] = useState(true);
+  const [savedLoadingMore, setSavedLoadingMore] = useState(false);
+
   const [activeTab, setActiveTab] = useState<'posts' | 'saved'>('posts');
   const [editOpen, setEditOpen] = useState(false);
   const [fullName, setFullName] = useState(user?.fullName || '');
@@ -32,6 +42,9 @@ export const Profile: React.FC = () => {
   const [listModalType, setListModalType] = useState<'followers' | 'following'>('followers');
   const [usersList, setUsersList] = useState<any[]>([]);
   const [listsLoading, setListsLoading] = useState(false);
+  const [listPage, setListPage] = useState(1);
+  const [listHasMore, setListHasMore] = useState(true);
+  const [listLoadingMore, setListLoadingMore] = useState(false);
 
   useEffect(() => {
     if (targetUsername) {
@@ -48,53 +61,63 @@ export const Profile: React.FC = () => {
         setProfileData(profRes.data);
       }
 
-      // Get posts feed (filter locally for user posts)
-      const postsRes = await apiClient.get('/posts/feed');
-      if (postsRes && postsRes.data) {
-        const mapped = postsRes.data.map((p: any) => ({
-          id: String(p.id),
-          authorName: p.user?.name || 'Anonymous User',
-          authorUsername: p.user?.username || 'anonymous',
-          authorId: p.user?.id,
-          authorAvatar: p.user?.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent('User')}&background=6366f1&color=fff`,
-          type: p.contentType === 'note' ? 'notes' : p.contentType,
-          mediaUrl: p.mediaUrl,
-          notesTitle: p.title,
-          notesPages: 4,
-          caption: p.description,
-          category: p.category?.name || 'General',
-          tags: [],
-          likesCount: p.likesCount || 0,
-          hasLiked: p.hasLiked || false,
-          hasSaved: p.hasSaved || false,
-          createdAt: new Date(p.createdAt).toLocaleDateString()
-        }));
-
-        setPosts(mapped.filter((p: any) => p.authorUsername === (paramUsername || user?.username)));
+      // Get posts feed for this user
+      setPostsPage(1);
+      setPostsHasMore(true);
+      const targetUser = paramUsername || user?.username;
+      if (targetUser) {
+        const postsRes = await apiClient.get(`/posts/user/${targetUser}?page=1&limit=10`);
+        if (postsRes && postsRes.data) {
+          if (postsRes.data.length < 10) setPostsHasMore(false);
+          const mapped = postsRes.data.map((p: any) => ({
+            id: String(p.id),
+            authorName: p.user?.name || 'Anonymous User',
+            authorUsername: p.user?.username || 'anonymous',
+            authorId: p.user?.id,
+            authorAvatar: p.user?.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent('User')}&background=6366f1&color=fff`,
+            type: p.contentType === 'note' ? 'notes' : p.contentType,
+            mediaUrl: p.mediaUrl,
+            notesTitle: p.title,
+            notesPages: 4,
+            caption: p.description,
+            category: p.category?.name || 'General',
+            tags: [],
+            likesCount: p.likesCount || 0,
+            hasLiked: p.hasLiked || false,
+            hasSaved: p.hasSaved || false,
+            createdAt: new Date(p.createdAt).toLocaleDateString()
+          }));
+          setPosts(mapped);
+        }
       }
 
       // Get saved posts
-      const savedRes = await apiClient.get('/posts/saved');
-      if (savedRes && savedRes.data) {
-        const mappedSaved = savedRes.data.map((p: any) => ({
-          id: String(p.id),
-          authorName: p.user?.name || 'Anonymous User',
-          authorUsername: p.user?.username || 'anonymous',
-          authorId: p.user?.id,
-          authorAvatar: p.user?.profileImage,
-          type: p.contentType === 'note' ? 'notes' : p.contentType,
-          mediaUrl: p.mediaUrl,
-          notesTitle: p.title,
-          notesPages: 4,
-          caption: p.description,
-          category: 'Bookmarked',
-          tags: [],
-          likesCount: p.likesCount || 0,
-          hasLiked: p.hasLiked || false,
-          hasSaved: p.hasSaved || true,
-          createdAt: new Date(p.createdAt).toLocaleDateString()
-        }));
-        setSavedPosts(mappedSaved);
+      setSavedPage(1);
+      setSavedHasMore(true);
+      if (isCurrentUser) {
+        const savedRes = await apiClient.get('/posts/saved?page=1&limit=10');
+        if (savedRes && savedRes.data) {
+          if (savedRes.data.length < 10) setSavedHasMore(false);
+          const mappedSaved = savedRes.data.map((p: any) => ({
+            id: String(p.id),
+            authorName: p.user?.name || 'Anonymous User',
+            authorUsername: p.user?.username || 'anonymous',
+            authorId: p.user?.id,
+            authorAvatar: p.user?.profileImage,
+            type: p.contentType === 'note' ? 'notes' : p.contentType,
+            mediaUrl: p.mediaUrl,
+            notesTitle: p.title,
+            notesPages: 4,
+            caption: p.description,
+            category: p.category?.name || 'Bookmarked',
+            tags: [],
+            likesCount: p.likesCount || 0,
+            hasLiked: p.hasLiked || false,
+            hasSaved: p.hasSaved || true,
+            createdAt: new Date(p.createdAt).toLocaleDateString()
+          }));
+          setSavedPosts(mappedSaved);
+        }
       }
 
     } catch (err) {
@@ -103,6 +126,100 @@ export const Profile: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const loadMoreUploads = async () => {
+    if (postsLoadingMore || !postsHasMore) return;
+    setPostsLoadingMore(true);
+    try {
+      const nextPage = postsPage + 1;
+      const targetUser = paramUsername || user?.username;
+      const postsRes = await apiClient.get(`/posts/user/${targetUser}?page=${nextPage}&limit=10`);
+      if (postsRes && postsRes.data) {
+        if (postsRes.data.length === 0) {
+          setPostsHasMore(false);
+        } else {
+          const mapped = postsRes.data.map((p: any) => ({
+            id: String(p.id),
+            authorName: p.user?.name || 'Anonymous User',
+            authorUsername: p.user?.username || 'anonymous',
+            authorId: p.user?.id,
+            authorAvatar: p.user?.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent('User')}&background=6366f1&color=fff`,
+            type: p.contentType === 'note' ? 'notes' : p.contentType,
+            mediaUrl: p.mediaUrl,
+            notesTitle: p.title,
+            notesPages: 4,
+            caption: p.description,
+            category: p.category?.name || 'General',
+            tags: [],
+            likesCount: p.likesCount || 0,
+            hasLiked: p.hasLiked || false,
+            hasSaved: p.hasSaved || false,
+            createdAt: new Date(p.createdAt).toLocaleDateString()
+          }));
+          setPosts(prev => [...prev, ...mapped]);
+          setPostsPage(nextPage);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading more uploads:', err);
+    } finally {
+      setPostsLoadingMore(false);
+    }
+  };
+
+  const loadMoreSaved = async () => {
+    if (savedLoadingMore || !savedHasMore || !isCurrentUser) return;
+    setSavedLoadingMore(true);
+    try {
+      const nextPage = savedPage + 1;
+      const savedRes = await apiClient.get(`/posts/saved?page=${nextPage}&limit=10`);
+      if (savedRes && savedRes.data) {
+        if (savedRes.data.length === 0) {
+          setSavedHasMore(false);
+        } else {
+          const mappedSaved = savedRes.data.map((p: any) => ({
+            id: String(p.id),
+            authorName: p.user?.name || 'Anonymous User',
+            authorUsername: p.user?.username || 'anonymous',
+            authorId: p.user?.id,
+            authorAvatar: p.user?.profileImage,
+            type: p.contentType === 'note' ? 'notes' : p.contentType,
+            mediaUrl: p.mediaUrl,
+            notesTitle: p.title,
+            notesPages: 4,
+            caption: p.description,
+            category: p.category?.name || 'Bookmarked',
+            tags: [],
+            likesCount: p.likesCount || 0,
+            hasLiked: p.hasLiked || false,
+            hasSaved: p.hasSaved || true,
+            createdAt: new Date(p.createdAt).toLocaleDateString()
+          }));
+          setSavedPosts(prev => [...prev, ...mappedSaved]);
+          setSavedPage(nextPage);
+        }
+      }
+    } catch (err) {
+      console.error('Error loading more saved:', err);
+    } finally {
+      setSavedLoadingMore(false);
+    }
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = document.documentElement;
+      if (scrollHeight - scrollTop <= clientHeight + 100) {
+        if (activeTab === 'posts') {
+          loadMoreUploads();
+        } else if (activeTab === 'saved') {
+          loadMoreSaved();
+        }
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [activeTab, postsPage, postsHasMore, postsLoadingMore, savedPage, savedHasMore, savedLoadingMore]);
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -169,9 +286,12 @@ export const Profile: React.FC = () => {
     setListModalOpen(true);
     setListsLoading(true);
     setUsersList([]);
+    setListPage(1);
+    setListHasMore(true);
     try {
-      const res = await apiClient.get(`/profile/${profileData.id}/${type}`);
+      const res = await apiClient.get(`/profile/${profileData.id}/${type}?page=1&limit=20`);
       if (res.data) {
+        if (res.data.length < 20) setListHasMore(false);
         if (type === 'followers') {
           setUsersList(res.data.map((f: any) => f.follower));
         } else {
@@ -182,6 +302,40 @@ export const Profile: React.FC = () => {
       console.error(`Error fetching ${type}:`, err);
     } finally {
       setListsLoading(false);
+    }
+  };
+
+  const loadMoreUsers = async () => {
+    if (!profileData?.id || listLoadingMore || !listHasMore) return;
+    setListLoadingMore(true);
+    try {
+      const nextPage = listPage + 1;
+      const res = await apiClient.get(`/profile/${profileData.id}/${listModalType}?page=${nextPage}&limit=20`);
+      if (res.data) {
+        if (res.data.length === 0) {
+          setListHasMore(false);
+        } else {
+          let newUsers = [];
+          if (listModalType === 'followers') {
+            newUsers = res.data.map((f: any) => f.follower);
+          } else {
+            newUsers = res.data.map((f: any) => f.following);
+          }
+          setUsersList(prev => [...prev, ...newUsers]);
+          setListPage(nextPage);
+        }
+      }
+    } catch (err) {
+      console.error(`Error loading more ${listModalType}:`, err);
+    } finally {
+      setListLoadingMore(false);
+    }
+  };
+
+  const handleListScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    if (scrollHeight - scrollTop <= clientHeight + 50 && !listLoadingMore && listHasMore) {
+      loadMoreUsers();
     }
   };
 
@@ -207,7 +361,7 @@ export const Profile: React.FC = () => {
       return;
     }
     try {
-      const res = await apiClient.post('/profile/toggle-follow', { followingId: userId });
+      const res = await apiClient.post('/profile/follow', { followingId: userId });
       if (res && res.data) {
         const followed = res.data.followed;
         setProfileData((prev: any) => ({
@@ -228,10 +382,10 @@ export const Profile: React.FC = () => {
       return;
     }
     try {
-      const res = await apiClient.post('/profile/toggle-follow', { followingId: userId });
+      const res = await apiClient.post('/profile/follow', { followingId: userId });
       if (res && res.data) {
         const followed = res.data.followed;
-        
+
         setUsersList(prev => prev.map(u => {
           if (u.id === userId) {
             return { ...u, isFollowing: followed };
@@ -265,7 +419,7 @@ export const Profile: React.FC = () => {
             <img src={profileData.coverImage || profileData.coverUrl} alt="Cover" className="w-full h-full object-cover" />
           ) : null}
           {isCurrentUser && (
-            <button 
+            <button
               onClick={() => document.getElementById('cover-upload')?.click()}
               className="absolute right-4 bottom-4 p-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-full text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-800 cursor-pointer hover:scale-105 transition"
             >
@@ -284,7 +438,7 @@ export const Profile: React.FC = () => {
               className="w-24 h-24 md:w-32 md:h-32 border-4 border-white dark:border-slate-900 shadow-lg group-hover:scale-105 transition-transform duration-300"
             />
             {isCurrentUser && (
-              <button 
+              <button
                 onClick={() => document.getElementById('avatar-upload')?.click()}
                 className="absolute bottom-1 right-1 p-1.5 bg-indigo-600 rounded-full text-white ring-2 ring-white dark:ring-slate-900 cursor-pointer hover:scale-110 hover:bg-indigo-500 shadow-sm transition-all"
               >
@@ -298,7 +452,7 @@ export const Profile: React.FC = () => {
               <h2 className="text-2xl font-extrabold font-heading">{profileData?.name || profileData?.fullName}</h2>
               <p className="text-sm text-slate-500">@{profileData?.username}</p>
             </div>
-            
+
             {isCurrentUser ? (
               <button
                 onClick={() => {
@@ -315,11 +469,10 @@ export const Profile: React.FC = () => {
               <div className="flex gap-2">
                 <button
                   onClick={() => handleToggleFollow(profileData?.id)}
-                  className={`inline-flex items-center justify-center gap-2 font-semibold py-2 px-6 rounded-xl text-sm transition cursor-pointer ${
-                    profileData?.isFollowing 
-                      ? 'border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60'
-                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                  }`}
+                  className={`inline-flex items-center justify-center gap-2 font-semibold py-2 px-6 rounded-xl text-sm transition cursor-pointer ${profileData?.isFollowing
+                    ? 'border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60'
+                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                    }`}
                 >
                   {profileData?.isFollowing ? 'Following' : 'Follow'}
                 </button>
@@ -361,11 +514,10 @@ export const Profile: React.FC = () => {
       <div className="flex border-b border-slate-200 dark:border-slate-800">
         <button
           onClick={() => setActiveTab('posts')}
-          className={`flex-1 flex items-center justify-center gap-2 py-3 font-semibold text-sm border-b-2 transition-all cursor-pointer ${
-            activeTab === 'posts'
-              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-              : 'border-transparent text-slate-500 hover:text-slate-700'
-          }`}
+          className={`flex-1 flex items-center justify-center gap-2 py-3 font-semibold text-sm border-b-2 transition-all cursor-pointer ${activeTab === 'posts'
+            ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+            : 'border-transparent text-slate-500 hover:text-slate-700'
+            }`}
         >
           <Grid className="w-4 h-4" />
           Uploads ({posts.length})
@@ -373,11 +525,10 @@ export const Profile: React.FC = () => {
         {isCurrentUser && (
           <button
             onClick={() => setActiveTab('saved')}
-            className={`flex-1 flex items-center justify-center gap-2 py-3 font-semibold text-sm border-b-2 transition-all cursor-pointer ${
-              activeTab === 'saved'
-                ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
+            className={`flex-1 flex items-center justify-center gap-2 py-3 font-semibold text-sm border-b-2 transition-all cursor-pointer ${activeTab === 'saved'
+              ? 'border-indigo-600 text-indigo-600 dark:text-indigo-400'
+              : 'border-transparent text-slate-500 hover:text-slate-700'
+              }`}
           >
             <Bookmark className="w-4 h-4" />
             Saved ({savedPosts.length})
@@ -398,9 +549,14 @@ export const Profile: React.FC = () => {
               <p className="text-slate-500 font-medium">No posts uploaded yet</p>
             </div>
           ) : (
-            posts.map(post => (
-              <PostCard key={post.id} post={post} />
-            ))
+            <>
+              {posts.map(post => (
+                <PostCard key={post.id} post={post} />
+              ))}
+              {postsLoadingMore && (
+                <p className="text-center text-sm text-slate-500 py-4 animate-pulse">Loading more uploads...</p>
+              )}
+            </>
           )
         ) : (
           savedPosts.length === 0 ? (
@@ -409,9 +565,14 @@ export const Profile: React.FC = () => {
               <p className="text-slate-500 font-medium">No bookmarked posts yet</p>
             </div>
           ) : (
-            savedPosts.map(post => (
-              <PostCard key={post.id} post={post} />
-            ))
+            <>
+              {savedPosts.map(post => (
+                <PostCard key={post.id} post={post} />
+              ))}
+              {savedLoadingMore && (
+                <p className="text-center text-sm text-slate-500 py-4 animate-pulse">Loading more saved...</p>
+              )}
+            </>
           )
         )}
       </div>
@@ -480,40 +641,47 @@ export const Profile: React.FC = () => {
           {listModalType}
         </DialogTitle>
         <DialogContent sx={{ p: 0 }}>
-          <div className="flex flex-col min-h-[300px] max-h-[500px] overflow-y-auto p-4 space-y-4">
+          <div
+            className="flex flex-col min-h-[300px] max-h-[500px] overflow-y-auto p-4 space-y-4 custom-scrollbar"
+            onScroll={handleListScroll}
+          >
             {listsLoading ? (
               <p className="text-center text-sm text-slate-500 py-8 animate-pulse">Loading...</p>
             ) : usersList.length === 0 ? (
               <p className="text-center text-sm text-slate-500 py-8">No {listModalType} found.</p>
             ) : (
-              usersList.map((u) => (
-                <div 
-                  key={u.id} 
-                  onClick={() => {
-                    setListModalOpen(false);
-                    navigate(`/profile/${u.username}`);
-                  }}
-                  className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-xl transition cursor-pointer"
-                >
-                  <Avatar src={u.profileImage} name={u.name || u.username} className="w-12 h-12" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-sm truncate">{u.name || u.username}</p>
-                    <p className="text-xs text-slate-500 truncate">@{u.username}</p>
-                  </div>
-                  {user && user.id !== u.id && (
-                    <button
-                      onClick={(e) => handleListUserFollow(u.id, e)}
-                      className={`text-xs font-bold px-4 py-1.5 rounded-full transition-colors ${
-                        u.isFollowing 
+              <>
+                {usersList.map((u) => (
+                  <div
+                    key={u.id}
+                    onClick={() => {
+                      setListModalOpen(false);
+                      navigate(`/profile/${u.username}`);
+                    }}
+                    className="flex items-center gap-3 p-2 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-xl transition cursor-pointer"
+                  >
+                    <Avatar src={u.profileImage} name={u.name || u.username} className="w-12 h-12" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-sm truncate">{u.name || u.username}</p>
+                      <p className="text-xs text-slate-500 truncate">@{u.username}</p>
+                    </div>
+                    {user && user.id !== u.id && (
+                      <button
+                        onClick={(e) => handleListUserFollow(u.id, e)}
+                        className={`text-xs font-bold px-4 py-1.5 rounded-full transition-colors ${u.isFollowing
                           ? 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30'
                           : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                      }`}
-                    >
-                      {u.isFollowing ? 'Following' : 'Follow'}
-                    </button>
-                  )}
-                </div>
-              ))
+                          }`}
+                      >
+                        {u.isFollowing ? 'Following' : 'Follow'}
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {listLoadingMore && (
+                  <p className="text-center text-sm text-slate-500 py-4 animate-pulse">Loading more...</p>
+                )}
+              </>
             )}
           </div>
         </DialogContent>

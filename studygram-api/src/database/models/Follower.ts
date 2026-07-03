@@ -22,8 +22,8 @@ export class Follower extends Model {
   followingId!: number;
 
   @BelongsTo(() => User, 'followerId')
-  follower!: User;
+  followerUser!: User;
 
   @BelongsTo(() => User, 'followingId')
-  following!: User;
+  followingUser!: User;
 }
