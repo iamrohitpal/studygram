@@ -1,16 +1,12 @@
 import { Table, Column, Model, DataType, ForeignKey, BelongsTo } from 'sequelize-typescript';
 import { User } from './User';
-import { Post } from './Post';
 
 @Table({
-  tableName: 'likes',
+  tableName: 'device_tokens',
   timestamps: true,
-  underscored: true,
-  indexes: [
-    { fields: ['user_id', 'post_id'] }
-  ]
+  underscored: true
 })
-export class Like extends Model {
+export class DeviceToken extends Model {
   @ForeignKey(() => User)
   @Column({
     type: DataType.INTEGER,
@@ -18,16 +14,13 @@ export class Like extends Model {
   })
   userId!: number;
 
-  @ForeignKey(() => Post)
   @Column({
-    type: DataType.INTEGER,
-    allowNull: false
+    type: DataType.STRING,
+    allowNull: false,
+    unique: true
   })
-  postId!: number;
+  token!: string;
 
   @BelongsTo(() => User)
   user!: User;
-
-  @BelongsTo(() => Post)
-  post!: Post;
 }

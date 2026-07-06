@@ -232,6 +232,28 @@ router.put('/profile', authenticateJWT, upload.fields([{ name: 'avatar', maxCoun
 
 /**
  * @openapi
+ * /profile/fcm-token:
+ *   put:
+ *     summary: Update Firebase Cloud Messaging token
+ *     tags: [Profile]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               fcmToken: { type: string }
+ *     responses:
+ *       200:
+ *         description: Token updated
+ */
+router.put('/profile/fcm-token', authenticateJWT, profileController.updateFcmToken);
+
+/**
+ * @openapi
  * /profile/follow:
  *   post:
  *     summary: Follow or unfollow user
@@ -422,6 +444,25 @@ router.get('/posts/:postId/comments', authenticateJWT, postController.getComment
 
 /**
  * @openapi
+ * /posts/{postId}/likes:
+ *   get:
+ *     summary: Get post likes
+ *     tags: [Posts]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - name: postId
+ *         in: path
+ *         required: true
+ *         schema: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Likes list
+ */
+router.get('/posts/:postId/likes', authenticateJWT, postController.getLikes);
+
+/**
+ * @openapi
  * /posts/save:
  *   post:
  *     summary: Save/unsave a post (Bookmark)
@@ -442,6 +483,29 @@ router.get('/posts/:postId/comments', authenticateJWT, postController.getComment
  *         description: Bookmark updated
  */
 router.post('/posts/save', authenticateJWT, postController.save);
+
+/**
+ * @openapi
+ * /posts/share:
+ *   post:
+ *     summary: Share a post
+ *     tags: [Posts]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [postId]
+ *             properties:
+ *               postId: { type: integer }
+ *     responses:
+ *       200:
+ *         description: Post shared
+ */
+router.post('/posts/share', authenticateJWT, postController.share);
 
 /**
  * @openapi
@@ -481,6 +545,15 @@ router.get('/posts/user/:username', optionalAuthenticateJWT, postController.getU
  *     summary: Get dynamic trending tags
  */
 router.get('/posts/trending-tags', postController.getTrendingTags);
+
+/**
+ * @swagger
+ * /posts/{postId}:
+ *   get:
+ *     summary: Get single post
+ *     tags: [Posts]
+ */
+router.get('/posts/:postId', optionalAuthenticateJWT, postController.getPost);
 
 /**
  * @swagger

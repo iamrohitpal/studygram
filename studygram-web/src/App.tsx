@@ -8,6 +8,8 @@ import { store } from './features/store';
 import type { RootState } from './features/store';
 import { getMuiTheme } from './theme/theme';
 import { SocketProvider } from './contexts/SocketContext';
+import { initializeFirebase, requestNotificationPermission, setupMessageListener } from './utils/firebase';
+import toast from 'react-hot-toast';
 
 // Layouts
 import { AuthLayout } from './layouts/AuthLayout';
@@ -36,6 +38,7 @@ const Saved = lazy(() => import('./pages/Saved').then(module => ({ default: modu
 const Profile = lazy(() => import('./pages/Profile').then(module => ({ default: module.Profile })));
 const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })));
 const Chat = lazy(() => import('./pages/Chat').then(module => ({ default: module.Chat })));
+const SinglePost = lazy(() => import('./pages/SinglePost').then(module => ({ default: module.SinglePost })));
 
 // Auth Pages
 const Login = lazy(() => import('./pages/auth/Login').then(module => ({ default: module.Login })));
@@ -98,6 +101,18 @@ const AppContent: React.FC = () => {
     return () => window.removeEventListener('unauthorized', handleUnauthorized);
   }, [dispatch]);
 
+  const { isAuthenticated } = useSelector((state: RootState) => state.auth);
+
+  React.useEffect(() => {
+    initializeFirebase();
+    if (isAuthenticated) {
+      requestNotificationPermission();
+      setupMessageListener((payload) => {
+        toast.success(`${payload.notification?.title}: ${payload.notification?.body}`, { duration: 5000 });
+      });
+    }
+  }, [isAuthenticated]);
+
   return (
     <ThemeProvider theme={muiTheme}>
       <CssBaseline />
@@ -110,6 +125,7 @@ const AppContent: React.FC = () => {
               <Route path="/" element={<Home />} />
               <Route path="/search" element={<Search />} />
               <Route path="/reels" element={<Reels />} />
+              <Route path="/post/:postId" element={<SinglePost />} />
 
               {/* Protected Routes (require login) */}
               <Route element={<ProtectedRoute />}>

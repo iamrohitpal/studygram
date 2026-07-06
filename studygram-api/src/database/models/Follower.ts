@@ -4,7 +4,11 @@ import { User } from './User';
 @Table({
   tableName: 'followers',
   timestamps: true,
-  underscored: true
+  underscored: true,
+  indexes: [
+    { fields: ['follower_id', 'following_id'] },
+    { fields: ['following_id'] }
+  ]
 })
 export class Follower extends Model {
   @ForeignKey(() => User)

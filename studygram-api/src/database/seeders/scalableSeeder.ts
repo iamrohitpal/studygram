@@ -2,14 +2,16 @@ import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { sequelize } from '../../config/db';
 
-const TOTAL_USERS = 10000;
-const TOTAL_CATEGORIES = 50;
-const TOTAL_POSTS = 20000;
-const FOLLOWS_PER_USER = 5000;
-const SAVES_PER_USER = 1000;
-const LIKES_PER_POST = 15000;
-const COMMENTS_PER_POST = 10000;
-const CHUNK_SIZE = 500; // Reduced batch insert size to prevent ER_NET_PACKET_TOO_LARGE
+const TOTAL_USERS = 100;
+const TOTAL_CATEGORIES = 10;
+const REELS_PER_USER = 10;
+const POSTS_PER_USER = 10;
+const TOTAL_POSTS = TOTAL_USERS * POSTS_PER_USER;
+const FOLLOWS_PER_USER = 50;
+const SAVES_PER_USER = 50;
+const LIKES_PER_POST = 150;
+const COMMENTS_PER_POST = 100;
+const CHUNK_SIZE = 50; // Reduced batch insert size to prevent ER_NET_PACKET_TOO_LARGE
 
 export async function runScalableSeed() {
   console.log('--- STARTING SCALABLE SEEDER ---');
@@ -18,8 +20,36 @@ export async function runScalableSeed() {
   try {
     await sequelize.authenticate();
 
-    // Disable foreign key checks for faster inserts
+    console.log('Killing sleeping MySQL processes to release old locks...');
+    const [processes] = await sequelize.query('SHOW PROCESSLIST');
+    let killed = 0;
+    for (const p of processes as any[]) {
+      if (p.Command === 'Sleep' && p.Time > 10) {
+        try {
+          await sequelize.query(`KILL ${p.Id}`);
+          killed++;
+        } catch (e) {
+          // Ignore kill errors
+        }
+      }
+    }
+    console.log(`Killed ${killed} sleeping connections.`);
+
+    // Disable foreign key checks for faster inserts and to allow truncating
     await sequelize.query('SET FOREIGN_KEY_CHECKS = 0;');
+
+    console.log('Truncating tables before seeding...');
+    await sequelize.query('TRUNCATE TABLE users;');
+    await sequelize.query('TRUNCATE TABLE categories;');
+    await sequelize.query('TRUNCATE TABLE posts;');
+    await sequelize.query('TRUNCATE TABLE likes;');
+    await sequelize.query('TRUNCATE TABLE comments;');
+    await sequelize.query('TRUNCATE TABLE followers;');
+    await sequelize.query('TRUNCATE TABLE saved_posts;');
+    await sequelize.query('TRUNCATE TABLE messages;');
+    await sequelize.query('TRUNCATE TABLE conversations;');
+    await sequelize.query('TRUNCATE TABLE conversation_participants;');
+    console.log('Tables truncated successfully.');
 
     const hashedPassword = await bcrypt.hash('password123', 10);
     const dateStr = new Date().toISOString().slice(0, 19).replace('T', ' ');
@@ -27,7 +57,7 @@ export async function runScalableSeed() {
     console.log(`[1/7] Seeding ${TOTAL_USERS} Users...`);
     let usersData = [];
     for (let i = 1; i <= TOTAL_USERS; i++) {
-      usersData.push(`('${uuidv4()}', 'User ${i}', 'user_${i}_${Date.now()}', 'user${i}_${Date.now()}@studygram.com', '${hashedPassword}', 'active', 'user', 1, '${dateStr}', '${dateStr}')`);
+      usersData.push(`('${uuidv4()}', 'User ${i}', 'user_${i}', 'user${i}@studygram.com', '${hashedPassword}', 'active', 'user', 1, '${dateStr}', '${dateStr}')`);
 
       if (usersData.length >= CHUNK_SIZE || i === TOTAL_USERS) {
         await sequelize.query(`INSERT INTO users (uuid, name, username, email, password, status, role, email_verified, created_at, updated_at) VALUES ${usersData.join(',')}`);
@@ -56,6 +86,24 @@ export async function runScalableSeed() {
         postsData = [];
         console.log(`      ...inserted ${i} posts`);
       }
+    }
+
+    console.log(`[3.5/7] Seeding Reels (${TOTAL_USERS * REELS_PER_USER} records)...`);
+    let reelsData = [];
+    let reelCount = 0;
+    const totalReels = TOTAL_USERS * REELS_PER_USER;
+    for (let i = 1; i <= TOTAL_USERS; i++) {
+      for (let j = 1; j <= REELS_PER_USER; j++) {
+        reelCount++;
+        const catId = (reelCount % TOTAL_CATEGORIES) + 1;
+        reelsData.push(`(${i}, ${catId}, 'Reel ${j} by User ${i}', 'Description for Reel ${j}', 'video', 'https://www.w3schools.com/html/mov_bbb.mp4', 0, 0, 'public', '${dateStr}', '${dateStr}')`);
+
+        if (reelsData.length >= CHUNK_SIZE || reelCount === totalReels) {
+          await sequelize.query(`INSERT INTO posts (user_id, category_id, title, description, content_type, media_url, likes_count, comments_count, visibility, created_at, updated_at) VALUES ${reelsData.join(',')}`);
+          reelsData = [];
+        }
+      }
+      if (i % 10 === 0) console.log(`      ...processed reels for ${i} users`);
     }
 
     console.log(`[4/7] Seeding Followers (${TOTAL_USERS * FOLLOWS_PER_USER} records)...`);
@@ -113,7 +161,7 @@ export async function runScalableSeed() {
         commentsData.push(`(${userId}, ${i}, 'This is comment ${j} on post ${i}', '${dateStr}', '${dateStr}')`);
 
         if (commentsData.length >= CHUNK_SIZE || j === COMMENTS_PER_POST) {
-          await sequelize.query(`INSERT INTO comments (user_id, post_id, content, created_at, updated_at) VALUES ${commentsData.join(',')}`);
+          await sequelize.query(`INSERT INTO comments (user_id, post_id, comment, created_at, updated_at) VALUES ${commentsData.join(',')}`);
           commentsData = [];
         }
       }
@@ -125,7 +173,7 @@ export async function runScalableSeed() {
 
     // Finalize counts
     console.log('Updating post counters...');
-    await sequelize.query('UPDATE posts SET likes_count = (SELECT COUNT(*) FROM likes WHERE likes.post_id = posts.id), comments_count = (SELECT COUNT(*) FROM comments WHERE comments.post_id = posts.id)');
+    await sequelize.query('UPDATE posts SET likes_count = (SELECT COUNT(*) FROM likes WHERE likes.post_id = posts.id), comments_count = (SELECT COUNT(*) FROM comments WHERE comments.post_id = posts.id), saves_count = (SELECT COUNT(*) FROM saved_posts WHERE saved_posts.post_id = posts.id)');
 
     console.log('--- SEEDING COMPLETE ---');
     process.exit(0);

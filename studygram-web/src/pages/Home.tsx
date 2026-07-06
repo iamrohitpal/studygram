@@ -80,8 +80,11 @@ export const Home: React.FC = () => {
       caption: p.description,
       category: p.category?.name || 'General',
       tags: [],
-      likesCount: p.likesCount || 0,
-      commentsCount: p.commentsCount || 0,
+      likesCount: p.likesCount ?? p.likes_count ?? 0,
+      commentsCount: p.commentsCount ?? p.comments_count ?? 0,
+      viewsCount: p.viewsCount ?? p.views_count ?? 0,
+      savesCount: p.savesCount ?? p.saves_count ?? 0,
+      sharesCount: p.sharesCount ?? p.shares_count ?? 0,
       hasLiked: p.hasLiked || false,
       hasSaved: p.hasSaved || false,
       createdAt: new Date(p.createdAt).toLocaleDateString()
@@ -168,16 +171,18 @@ export const Home: React.FC = () => {
                 <p className="font-bold text-sm text-slate-800 dark:text-slate-200 truncate cursor-pointer hover:text-indigo-600 transition" onClick={() => navigate(`/profile/${creator.handle.substring(1)}`)}>{creator.name}</p>
                 <p className="text-xs text-slate-500 truncate">{creator.handle}</p>
               </div>
-              <button
-                onClick={(e) => handleToggleFollow(creator.id, e)}
-                className={`w-full text-xs font-bold py-2 rounded-xl transition-colors ${
-                  creator.isFollowing 
-                    ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30'
-                    : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                }`}
-              >
-                {creator.isFollowing ? 'Following' : 'Follow'}
-              </button>
+              {user && Number(user.id) !== Number(creator.id) && (
+                <button
+                  onClick={(e) => handleToggleFollow(creator.id, e)}
+                  className={`w-full text-xs font-bold py-2 rounded-xl transition-colors ${
+                    creator.isFollowing 
+                      ? 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-900/30'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}
+                >
+                  {creator.isFollowing ? 'Following' : 'Follow'}
+                </button>
+              )}
             </div>
           ))}
         </div>

@@ -5,6 +5,7 @@ import { User } from '../database/models/User';
 import { Message } from '../database/models/Message';
 import { MessageStatus } from '../database/models/MessageStatus';
 import { ConversationParticipant } from '../database/models/ConversationParticipant';
+import { firebaseService } from '../services/FirebaseService';
 
 export class SocketServer {
   private static instance: SocketIOServer;
@@ -102,11 +103,29 @@ export class SocketServer {
           this.io.to(`conversation_${data.conversationId}`).emit('new_message', messageWithSender);
           
           // Also update conversation list for all participants
-          participants.forEach(p => {
+          participants.forEach(async p => {
             this.io.to(`user_${p.userId}`).emit('conversation_updated', {
               conversationId: data.conversationId,
               lastMessage: messageWithSender
             });
+
+            // Push notification
+            if (p.userId !== user.id) {
+              const participantUser = await User.findByPk(p.userId);
+              if (participantUser) {
+                const { DeviceToken } = require('../database/models/DeviceToken');
+                const deviceTokens = await DeviceToken.findAll({ where: { userId: p.userId } });
+                const tokens = deviceTokens.map((t: any) => t.token);
+                if (tokens.length > 0) {
+                  firebaseService.sendPushNotification(
+                    tokens,
+                    `New message from ${user.name}`,
+                    data.messageType === 'text' ? data.message : `Sent a ${data.messageType}`,
+                    { conversationId: String(data.conversationId) }
+                  );
+                }
+              }
+            }
           });
 
         } catch (err) {

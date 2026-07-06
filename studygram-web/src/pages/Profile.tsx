@@ -83,6 +83,10 @@ export const Profile: React.FC = () => {
             category: p.category?.name || 'General',
             tags: [],
             likesCount: p.likesCount || 0,
+            commentsCount: p.commentsCount || 0,
+            viewsCount: p.viewsCount || 0,
+            savesCount: p.savesCount || 0,
+            sharesCount: p.sharesCount || 0,
             hasLiked: p.hasLiked || false,
             hasSaved: p.hasSaved || false,
             createdAt: new Date(p.createdAt).toLocaleDateString()
@@ -112,6 +116,10 @@ export const Profile: React.FC = () => {
             category: p.category?.name || 'Bookmarked',
             tags: [],
             likesCount: p.likesCount || 0,
+            commentsCount: p.commentsCount || 0,
+            viewsCount: p.viewsCount || 0,
+            savesCount: p.savesCount || 0,
+            sharesCount: p.sharesCount || 0,
             hasLiked: p.hasLiked || false,
             hasSaved: p.hasSaved || true,
             createdAt: new Date(p.createdAt).toLocaleDateString()
@@ -152,6 +160,10 @@ export const Profile: React.FC = () => {
             category: p.category?.name || 'General',
             tags: [],
             likesCount: p.likesCount || 0,
+            commentsCount: p.commentsCount || 0,
+            viewsCount: p.viewsCount || 0,
+            savesCount: p.savesCount || 0,
+            sharesCount: p.sharesCount || 0,
             hasLiked: p.hasLiked || false,
             hasSaved: p.hasSaved || false,
             createdAt: new Date(p.createdAt).toLocaleDateString()
@@ -191,6 +203,10 @@ export const Profile: React.FC = () => {
             category: p.category?.name || 'Bookmarked',
             tags: [],
             likesCount: p.likesCount || 0,
+            commentsCount: p.commentsCount || 0,
+            viewsCount: p.viewsCount || 0,
+            savesCount: p.savesCount || 0,
+            sharesCount: p.sharesCount || 0,
             hasLiked: p.hasLiked || false,
             hasSaved: p.hasSaved || true,
             createdAt: new Date(p.createdAt).toLocaleDateString()
@@ -665,7 +681,7 @@ export const Profile: React.FC = () => {
                       <p className="font-bold text-sm truncate">{u.name || u.username}</p>
                       <p className="text-xs text-slate-500 truncate">@{u.username}</p>
                     </div>
-                    {user && user.id !== u.id && (
+                    {user && Number(user.id) !== Number(u.id) && (
                       <button
                         onClick={(e) => handleListUserFollow(u.id, e)}
                         className={`text-xs font-bold px-4 py-1.5 rounded-full transition-colors ${u.isFollowing

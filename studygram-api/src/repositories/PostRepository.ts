@@ -11,11 +11,17 @@ export class PostRepository extends BaseRepository<Post> {
   async findFeedPosts(options?: any, visibilities: string[] = ['public'], currentUserId?: number, followedUserIds: number[] = [], preferredCategoryIds: number[] = []): Promise<Post[]> {
     const { Op } = require('sequelize');
     
-    let whereCondition: any = { status: 'active', visibility: { [Op.in]: visibilities } };
+    let whereCondition: any = { 
+      status: 'active', 
+      visibility: { [Op.in]: visibilities },
+      // Time-box query to last 30 days for performance at scale
+      createdAt: { [Op.gt]: require('sequelize').literal('(NOW() - INTERVAL 30 DAY)') }
+    };
 
     if (currentUserId) {
       whereCondition = {
         status: 'active',
+        createdAt: { [Op.gt]: require('sequelize').literal('(NOW() - INTERVAL 30 DAY)') },
         [Op.or]: [
           { visibility: { [Op.in]: visibilities } },
           { visibility: 'followers', userId: { [Op.in]: followedUserIds } },
@@ -34,8 +40,7 @@ export class PostRepository extends BaseRepository<Post> {
     const preferredCatsStr = preferredCategoryIds.length > 0 ? preferredCategoryIds.join(',') : '0';
 
     const orderLiteral = `
-      (likes_count * 2) + 
-      (comments_count * 3) + 
+      engagement_score + 
       IF(\`Post\`.\`user_id\` IN (${followedIdsStr}), 1000, 0) + 
       IF(\`Post\`.\`user_id\` IN (${followedIdsStr}) AND \`Post\`.\`created_at\` > (NOW() - INTERVAL 1 DAY), 2000, 0) + 
       IF(\`Post\`.\`category_id\` IN (${preferredCatsStr}), 500, 0)

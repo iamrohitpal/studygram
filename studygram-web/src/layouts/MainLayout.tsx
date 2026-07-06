@@ -42,7 +42,7 @@ export const MainLayout: React.FC = () => {
   const { user } = useSelector((state: RootState) => state.auth);
   const { themeMode, hasNewPosts, hasNewReels } = useSelector((state: RootState) => state.ui);
   const { conversations } = useSelector((state: RootState) => state.chat);
-  
+
   const totalUnreadChats = conversations.reduce((acc, curr) => acc + (curr.unreadCount || 0), 0);
 
   const sidebarOpen = true;
@@ -79,6 +79,7 @@ export const MainLayout: React.FC = () => {
           title: n.title,
           message: n.message,
           isRead: n.isRead,
+          postId: n.postId,
           createdAt: new Date(n.createdAt).toLocaleDateString()
         })));
       }
@@ -102,6 +103,7 @@ export const MainLayout: React.FC = () => {
             title: n.title,
             message: n.message,
             isRead: n.isRead,
+            postId: n.postId,
             createdAt: new Date(n.createdAt).toLocaleDateString()
           }));
           setNotifications(prev => [...prev, ...newNotifs]);
@@ -161,37 +163,37 @@ export const MainLayout: React.FC = () => {
   };
 
   const menuItems = [
-    { 
-      name: 'Home Feed', 
+    {
+      name: 'Home Feed',
       icon: (
         <Badge color="error" variant="dot" invisible={!hasNewPosts}>
           <Home className="w-5 h-5" />
         </Badge>
-      ), 
-      path: '/' 
+      ),
+      path: '/'
     },
     { name: 'Search', icon: <Search className="w-5 h-5" />, path: '/search' },
-    { 
-      name: 'Study Reels', 
+    {
+      name: 'Study Reels',
       icon: (
         <Badge color="error" variant="dot" invisible={!hasNewReels}>
           <Film className="w-5 h-5" />
         </Badge>
-      ), 
-      path: '/reels' 
+      ),
+      path: '/reels'
     }
   ];
 
   if (user) {
     menuItems.push(
-      { 
-        name: 'Messages', 
+      {
+        name: 'Messages',
         icon: (
           <Badge color="error" variant="dot" invisible={totalUnreadChats === 0}>
             <MessageCircle className="w-5 h-5" />
           </Badge>
-        ), 
-        path: '/chat' 
+        ),
+        path: '/chat'
       },
       { name: 'Upload Center', icon: <PlusSquare className="w-5 h-5" />, path: '/upload' },
       { name: 'Profile', icon: <User className="w-5 h-5" />, path: `/profile` },
@@ -370,7 +372,12 @@ export const MainLayout: React.FC = () => {
         ) : (
           <div className="overflow-y-auto max-h-[300px]" onScroll={handleNotifScroll}>
             {notifications.map((notif) => (
-              <MenuItem key={notif.id} onClick={handleNotifClose} sx={{ borderBottom: '1px solid rgba(0,0,0,0.03)', py: 1.5 }}>
+              <MenuItem key={notif.id} onClick={() => {
+                handleNotifClose();
+                if (notif.postId) {
+                  navigate(`/post/${notif.postId}`);
+                }
+              }} sx={{ borderBottom: '1px solid rgba(0,0,0,0.03)', py: 1.5 }}>
                 <div className="flex items-start gap-3 w-full">
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{notif.title}</p>

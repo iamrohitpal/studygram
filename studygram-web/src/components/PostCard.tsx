@@ -11,7 +11,8 @@ import {
   Bookmark,
   BookOpen,
   Send,
-  MoreHorizontal
+  MoreHorizontal,
+  Eye
 } from 'lucide-react';
 import {
   Dialog,
@@ -26,6 +27,7 @@ export interface CommentData {
   id: string;
   authorName: string;
   authorAvatar: string;
+  authorUsername?: string;
   content: string;
   timestamp: string;
 }
@@ -45,6 +47,9 @@ export interface PostCardProps {
     tags: string[];
     likesCount: number;
     commentsCount?: number;
+    viewsCount?: number;
+    savesCount?: number;
+    sharesCount?: number;
     hasLiked: boolean;
     hasSaved: boolean;
     createdAt: string;
@@ -59,10 +64,15 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
   const [likesCount, setLikesCount] = useState(post.likesCount);
   const [hasLiked, setHasLiked] = useState(post.hasLiked || false);
   const [hasSaved, setHasSaved] = useState(post.hasSaved || false);
+  const [savesCount, setSavesCount] = useState(post.savesCount || 0);
+  const [sharesCount, setSharesCount] = useState(post.sharesCount || 0);
   const [hasFollowed, setHasFollowed] = useState(false);
   const [commentsPage, setCommentsPage] = useState(1);
   const [commentsHasMore, setCommentsHasMore] = useState(true);
-  const [commentsLoadingMore, setCommentsLoadingMore] = useState(false); // Can be enhanced later if API returns follow state per post author
+  const [commentsLoadingMore, setCommentsLoadingMore] = useState(false);
+  const [likesList, setLikesList] = useState<any[]>([]);
+  const [showLikes, setShowLikes] = useState(false);
+  const [loadingLikes, setLoadingLikes] = useState(false); // Can be enhanced later if API returns follow state per post author
   const [comments, setComments] = useState<CommentData[]>([]);
   const [commentsCount, setCommentsCount] = useState(post.commentsCount || 0);
 
@@ -77,6 +87,9 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
     setLikesCount(post.likesCount);
     setHasLiked(post.hasLiked || false);
     setHasSaved(post.hasSaved || false);
+    setSavesCount(post.savesCount || 0);
+    setSharesCount(post.sharesCount || 0);
+    setCommentsCount(post.commentsCount || 0);
   }, [post]);
 
   // Load comments dynamically when dialog opens
@@ -96,6 +109,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         const mapped = response.data.map((c: any) => ({
           id: String(c.id),
           authorName: c.user?.name || 'User',
+          authorUsername: c.user?.username,
           authorAvatar: c.user?.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent('User')}&background=6366f1&color=fff`,
           content: c.comment,
           timestamp: new Date(c.createdAt).toLocaleDateString()
@@ -120,6 +134,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
           const mapped = response.data.map((c: any) => ({
             id: String(c.id),
             authorName: c.user?.name || 'User',
+            authorUsername: c.user?.username,
             authorAvatar: c.user?.profileImage || `https://ui-avatars.com/api/?name=${encodeURIComponent('User')}&background=6366f1&color=fff`,
             content: c.comment,
             timestamp: new Date(c.createdAt).toLocaleDateString()
@@ -132,6 +147,21 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
       console.error('Error loading more comments:', err);
     } finally {
       setCommentsLoadingMore(false);
+    }
+  };
+
+  const fetchLikes = async () => {
+    if (likesList.length > 0) return;
+    setLoadingLikes(true);
+    try {
+      const response = await apiClient.get(`/posts/${post.id}/likes`);
+      if (response.data) {
+        setLikesList(response.data);
+      }
+    } catch (err) {
+      console.error('Error fetching likes:', err);
+    } finally {
+      setLoadingLikes(false);
     }
   };
 
@@ -148,7 +178,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
       const originalHasLiked = hasLiked;
       const newLiked = !originalHasLiked;
       setHasLiked(newLiked);
-      setLikesCount(prev => prev + (newLiked ? 1 : -1));
+      setLikesCount(prev => Math.max(0, prev + (newLiked ? 1 : -1)));
       
       await apiClient.post('/posts/like', { postId: Number(post.id) });
     } catch (err) {
@@ -162,6 +192,7 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
       const originalHasSaved = hasSaved;
       const newSaved = !originalHasSaved;
       setHasSaved(newSaved);
+      setSavesCount(prev => Math.max(0, prev + (newSaved ? 1 : -1)));
 
       await apiClient.post('/posts/save', { postId: Number(post.id) });
     } catch (err) {
@@ -202,11 +233,12 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
         const newComment: CommentData = {
           id: String(response.data.id),
           authorName: user.fullName,
+          authorUsername: user.username,
           authorAvatar: user.avatarUrl,
           content: commentText.trim(),
           timestamp: 'Just now'
         };
-        setComments(prev => [...prev, newComment]);
+        setComments(prev => [newComment, ...prev]);
         setCommentsCount(prev => prev + 1);
         setCommentText('');
       }
@@ -215,7 +247,16 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
     }
   };
 
-  const handleShare = () => {
+  const handleShare = async () => {
+    if (user) {
+      try {
+        await apiClient.post('/posts/share', { postId: Number(post.id) });
+        setSharesCount(prev => prev + 1);
+      } catch (err) {
+        console.error('Error sharing post on backend:', err);
+      }
+    }
+
     if (navigator.share) {
       navigator.share({
         title: post.notesTitle || 'StudyGram Post',
@@ -331,21 +372,26 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
 
       {/* Action Buttons */}
       <div className="flex items-center justify-between px-4 py-4">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 hide-scrollbar snap-x">
           {user ? (
-            <button
-              onClick={handleLike}
-              className={`flex items-center justify-center gap-2 text-xs font-bold rounded-2xl px-4 py-2.5 transition-all duration-300 ${
-                hasLiked ? 'text-rose-500 bg-rose-50 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-950/50 hover:shadow-lg hover:shadow-rose-500/20' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400'
-              }`}
-            >
-              <Heart className={`w-5 h-5 ${hasLiked ? 'fill-current text-rose-500' : 'text-slate-500 dark:text-slate-400'}`} />
-              {likesCount}
-            </button>
+            <div className="flex gap-1 items-center">
+              <button 
+                onClick={handleLike}
+                className="flex items-center justify-center gap-2 text-xs font-bold rounded-l-2xl px-3 py-2.5 transition-all duration-300 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-slate-600 dark:text-slate-400 hover:text-rose-500"
+              >
+                <Heart className={`w-5 h-5 ${hasLiked ? 'fill-current text-rose-500' : 'text-slate-500 dark:text-slate-400'}`} />
+              </button>
+              <button
+                onClick={() => { setShowLikes(true); fetchLikes(); }}
+                className="text-xs font-bold text-slate-600 dark:text-slate-400 hover:text-rose-500 px-1 hover:underline"
+              >
+                {likesCount ?? 0}
+              </button>
+            </div>
           ) : (
             <div className="flex items-center justify-center gap-2 text-xs font-bold rounded-xl px-3 py-2 text-slate-600 dark:text-slate-400">
               <Heart className="w-5 h-5 text-slate-500 dark:text-slate-400" />
-              {likesCount}
+              {likesCount ?? 0}
             </div>
           )}
           
@@ -356,34 +402,42 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                 className="flex items-center justify-center gap-2 text-xs font-bold rounded-2xl px-4 py-2.5 text-slate-600 dark:text-slate-400 transition-all duration-300 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 hover:text-indigo-600 dark:hover:text-indigo-400"
               >
                 <MessageCircle className="w-5 h-5 text-slate-500 dark:text-slate-400 hover:text-indigo-600 transition-colors" />
-                {commentsCount}
-              </button>
-              <button
-                onClick={handleShare}
-                className="flex items-center justify-center gap-2 text-xs font-bold rounded-2xl px-4 py-2.5 text-slate-600 dark:text-slate-400 transition-all duration-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:text-emerald-600 dark:hover:text-emerald-400 hidden sm:flex"
-              >
-                <Share2 className="w-5 h-5 text-slate-500 dark:text-slate-400" />
-                Share
+                {commentsCount ?? 0}
               </button>
             </>
           ) : (
-            <div className="flex gap-2">
-              <span className="flex items-center gap-2 text-xs font-bold text-slate-500 px-3 py-2"><Heart className="w-5 h-5" /> {likesCount}</span>
-              <span className="flex items-center gap-2 text-xs font-bold text-slate-500 px-3 py-2"><MessageCircle className="w-5 h-5" /> {commentsCount}</span>
+            <div className="flex items-center justify-center gap-2 text-xs font-bold rounded-xl px-3 py-2 text-slate-600 dark:text-slate-400">
+              <MessageCircle className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+              {commentsCount ?? 0}
             </div>
           )}
+
+          <button
+            onClick={handleShare}
+            className="flex items-center justify-center gap-2 text-xs font-bold rounded-2xl px-4 py-2.5 text-slate-600 dark:text-slate-400 transition-all duration-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 hover:text-emerald-600 dark:hover:text-emerald-400"
+          >
+            <Share2 className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+            <span className="hidden sm:inline">Share</span>
+            <span className="sm:hidden">{sharesCount}</span>
+          </button>
+
+          <div className="flex items-center justify-center gap-2 text-xs font-bold rounded-xl px-3 py-2 text-slate-600 dark:text-slate-400 hidden sm:flex">
+            <Eye className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+            {post.viewsCount ?? 0}
+          </div>
         </div>
 
         {user && (
           <button 
             onClick={handleSave}
-            className={`p-2.5 rounded-2xl transition-all duration-300 ${
+            className={`flex items-center justify-center gap-2 text-xs font-bold rounded-2xl px-4 py-2.5 transition-all duration-300 ${
               hasSaved 
                 ? 'text-amber-500 bg-amber-50 dark:bg-amber-950/30 hover:bg-amber-100 dark:hover:bg-amber-950/50 hover:shadow-lg hover:shadow-amber-500/20' 
                 : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-amber-500 dark:hover:text-amber-400'
             }`}
           >
             <Bookmark className={`w-5 h-5 ${hasSaved ? 'fill-current text-amber-500' : 'text-slate-500 dark:text-slate-400'}`} />
+            {savesCount}
           </button>
         )}
       </div>
@@ -416,14 +470,32 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                 <>
                   {comments.map((comment) => (
                     <div key={comment.id} className="flex gap-3">
-                      <Avatar
-                        src={comment.authorAvatar}
-                        name={comment.authorName || 'User'}
-                        className="w-8 h-8"
-                      />
+                      <div 
+                        className="cursor-pointer flex-shrink-0" 
+                        onClick={() => {
+                          if (comment.authorUsername) {
+                            navigate(`/profile/${comment.authorUsername}`);
+                          }
+                        }}
+                      >
+                        <Avatar
+                          src={comment.authorAvatar}
+                          name={comment.authorName || 'User'}
+                          className="w-8 h-8 hover:opacity-80 transition"
+                        />
+                      </div>
                       <div>
                         <div className="bg-slate-50 dark:bg-slate-850/50 p-3 rounded-2xl rounded-tl-none">
-                          <p className="text-xs font-semibold">{comment.authorName}</p>
+                          <p 
+                            className="text-xs font-semibold cursor-pointer hover:underline"
+                            onClick={() => {
+                              if (comment.authorUsername) {
+                                navigate(`/profile/${comment.authorUsername}`);
+                              }
+                            }}
+                          >
+                            {comment.authorName}
+                          </p>
                           <p className="text-xs text-slate-700 dark:text-slate-300 mt-0.5 leading-relaxed font-sans">
                             {comment.content}
                           </p>
@@ -455,6 +527,49 @@ export const PostCard: React.FC<PostCardProps> = ({ post }) => {
                 <Send className="w-3.5 h-3.5" />
               </button>
             </form>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Likes Dialog */}
+      <Dialog
+        open={showLikes}
+        onClose={() => setShowLikes(false)}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: {
+              borderRadius: '24px',
+              bgcolor: 'background.paper',
+            }
+          }
+        }}
+      >
+        <DialogTitle sx={{ borderBottom: '1px solid rgba(0,0,0,0.06)', fontFamily: 'Outfit' }}>
+          Likes
+        </DialogTitle>
+        <DialogContent sx={{ p: 0 }}>
+          <div className="flex flex-col max-h-[400px] overflow-y-auto p-2">
+            {loadingLikes ? (
+              <p className="text-center text-sm text-slate-500 py-8 animate-pulse">Loading...</p>
+            ) : likesList.length === 0 ? (
+              <p className="text-center text-sm text-slate-500 py-8">No likes yet.</p>
+            ) : (
+              likesList.map((liker) => (
+                <div 
+                  key={liker.id} 
+                  className="flex items-center gap-3 p-3 hover:bg-slate-50 dark:hover:bg-slate-800/50 rounded-xl cursor-pointer transition"
+                  onClick={() => navigate(`/profile/${liker.username}`)}
+                >
+                  <Avatar src={liker.profileImage} name={liker.name || liker.username} className="w-10 h-10" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold truncate">{liker.name || liker.username}</p>
+                    <p className="text-xs text-slate-500 truncate">@{liker.username}</p>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </DialogContent>
       </Dialog>

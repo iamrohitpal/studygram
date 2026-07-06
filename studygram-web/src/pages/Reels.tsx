@@ -247,8 +247,11 @@ export const Reels: React.FC = () => {
       mediaUrl: p.mediaUrl,
       authorName: p.user?.name || 'Anonymous Creator',
       authorAvatar: p.user?.profileImage,
-      likesCount: p.likesCount || 0,
-      commentsCount: p.commentsCount || 0,
+      likesCount: p.likesCount ?? p.likes_count ?? 0,
+      commentsCount: p.commentsCount ?? p.comments_count ?? 0,
+      viewsCount: p.viewsCount ?? p.views_count ?? 0,
+      savesCount: p.savesCount ?? p.saves_count ?? 0,
+      sharesCount: p.sharesCount ?? p.shares_count ?? 0,
       category: p.category?.name || 'General'
     }));
   };

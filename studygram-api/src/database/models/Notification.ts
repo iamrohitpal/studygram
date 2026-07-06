@@ -33,6 +33,12 @@ export class Notification extends Model {
   })
   isRead!: boolean;
 
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true
+  })
+  postId?: number;
+
   @BelongsTo(() => User)
   user!: User;
 }

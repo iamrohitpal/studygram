@@ -101,6 +101,34 @@ export class ProfileController {
       next(error);
     }
   }
+  async updateFcmToken(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const userId = req.user!.id;
+      const { fcmToken } = req.body;
+      
+      if (!fcmToken) {
+        return res.status(400).json({ status: 'error', message: 'FCM token required' });
+      }
+
+      const { DeviceToken } = require('../database/models/DeviceToken');
+      
+      // Upsert the token to avoid duplicates, or just findOrCreate
+      const [tokenRecord, created] = await DeviceToken.findOrCreate({
+        where: { token: fcmToken },
+        defaults: { userId, token: fcmToken }
+      });
+
+      // If token exists but belongs to another user (or current user re-logged in), update userId
+      if (!created && tokenRecord.userId !== userId) {
+        tokenRecord.userId = userId;
+        await tokenRecord.save();
+      }
+
+      res.status(200).json({ status: 'success', message: 'FCM token registered successfully' });
+    } catch (error) {
+      next(error);
+    }
+  }
 }
 
 export const profileController = new ProfileController();

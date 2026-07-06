@@ -57,9 +57,16 @@ export class PostController {
           }
         }
 
-        // We can send push notifications (without FCM tokens, it skips silently)
-        // Ideally we fetch FCM tokens for followers here
-        // firebaseService.sendPushNotification(tokens, title, body);
+        // Fetch FCM tokens for followers from DeviceToken table
+        const { DeviceToken } = require('../database/models/DeviceToken');
+        const deviceTokens = await DeviceToken.findAll({ 
+          where: { userId: followerIds },
+          attributes: ['token']
+        });
+        const tokens = deviceTokens.map((t: any) => t.token).filter(Boolean) as string[];
+        if (tokens.length > 0) {
+          firebaseService.sendPushNotification(tokens, title, body, { postId: String(post.id) });
+        }
       } catch (err) {
         console.error('Failed to notify followers for post:', err);
       }
@@ -165,6 +172,22 @@ export class PostController {
     }
   }
 
+  async getLikes(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { postId } = req.params;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+
+      const likes = await postService.getLikes(Number(postId), page, limit);
+      res.status(200).json({
+        status: 'success',
+        data: likes
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async save(req: AuthRequest, res: Response, next: NextFunction) {
     try {
       const { postId } = req.body;
@@ -177,6 +200,46 @@ export class PostController {
         status: 'success',
         message: result.saved ? 'Post saved.' : 'Post unsaved.',
         data: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async share(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { postId } = req.body;
+      if (!postId) throw new Error('postId is required.');
+
+      const userId = req.user!.id;
+      const result = await postService.sharePost(userId, Number(postId));
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Post shared.',
+        data: result
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getPost(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const { postId } = req.params;
+      const post = await postService.getPostById(Number(postId), req.user?.id);
+      
+      if (!post) {
+        res.status(404).json({
+          status: 'error',
+          message: 'Post not found'
+        });
+        return;
+      }
+
+      res.status(200).json({
+        status: 'success',
+        data: post
       });
     } catch (error) {
       next(error);

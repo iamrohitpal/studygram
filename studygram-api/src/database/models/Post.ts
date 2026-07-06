@@ -8,7 +8,13 @@ import { SavedPost } from './SavedPost';
 @Table({
   tableName: 'posts',
   timestamps: true,
-  underscored: true
+  underscored: true,
+  indexes: [
+    { fields: ['user_id'] },
+    { fields: ['category_id'] },
+    { fields: ['status', 'visibility', 'created_at'] },
+    { fields: ['engagement_score'] }
+  ]
 })
 export class Post extends Model {
   @ForeignKey(() => User)
@@ -82,6 +88,27 @@ export class Post extends Model {
     allowNull: false
   })
   commentsCount!: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    defaultValue: 0,
+    allowNull: false
+  })
+  savesCount!: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    defaultValue: 0,
+    allowNull: false
+  })
+  sharesCount!: number;
+
+  @Column({
+    type: DataType.INTEGER,
+    defaultValue: 0,
+    allowNull: false
+  })
+  engagementScore!: number;
 
   @Column({
     type: DataType.ENUM('active', 'flagged', 'hidden'),
