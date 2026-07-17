@@ -1,0 +1,1 @@
+import { Follower } from './src/database/models/Follower'; import { sequelize } from './src/config/db'; async function test() { await sequelize.authenticate(); const count = await Follower.count({ where: { followingId: 1 }}); console.log('Followers of 1:', count); process.exit(0); } test();  
